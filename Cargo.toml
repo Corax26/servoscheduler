@@ -1,0 +1,13 @@
+[package]
+name = "servoscheduler"
+version = "0.1.0"
+authors = ["Kevin Brodsky <corax26@gmail.com>"]
+
+[dependencies]
+log = "0.4"
+env_logger = "0.5.3"
+chrono = "0.4"
+bitflags = "1.0.1"
+num = "0.1.41"
+serde = "*"
+serde_derive = "*"
