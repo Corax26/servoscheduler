@@ -8,19 +8,19 @@ use chrono::Datelike;
 use utils::*;
 
 // Actuator.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum ActuatorType {
     Toggle,
     FloatValue { min: f64, max: f64 },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum ActuatorState {
     Toggle(bool),
     FloatValue(f64),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Actuator {
     pub name: String,
     pub actuator_type: ActuatorType,
@@ -49,7 +49,7 @@ impl Actuator {
 }
 
 // Time constructs.
-#[derive(Clone, Copy, PartialEq, PartialOrd, Debug)]
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, PartialOrd, Debug)]
 pub struct Date {
     pub year: u16,
     pub month: u8,
@@ -93,7 +93,7 @@ impl Date {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Time {
     pub hour: u8,
     pub minute: u8,
@@ -120,6 +120,7 @@ impl PartialOrd for Time {
 }
 
 bitflags! {
+    #[derive(Serialize, Deserialize)]
     pub struct WeekdaySet: u8 {
         const MONDAY    = 0b0000001;
         const TUESDAY   = 0b0000010;
@@ -134,7 +135,7 @@ bitflags! {
 pub type TimeInterval = ExclusiveRange<Time>;
 pub type DateRange = InclusiveRange<Date>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TimePeriod {
     pub time_interval: TimeInterval,
     pub date_range: DateRange,
@@ -168,7 +169,7 @@ impl TimePeriod {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TimeSlot {
     pub enabled: bool,
     pub actuator_state: ActuatorState,
@@ -203,7 +204,7 @@ impl TimeSlot {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Schedule {
     pub timeslots: HashMap<u32, TimeSlot>,
     pub default_state: ActuatorState,
@@ -218,7 +219,7 @@ impl Schedule {
     }
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum InvalArgError {
     ActuatorId,
     TimeSlotId,
@@ -241,7 +242,7 @@ impl fmt::Display for InvalArgError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Error {
     InvalidArgument(InvalArgError),
     TimeSlotOverlap(u32),
@@ -266,9 +267,9 @@ impl From<InvalArgError> for Error {
     }
 }
 
-type Result<T> = result::Result<T, Error>;
+pub type Result<T> = result::Result<T, Error>;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Server {
     actuators: HashMap<u32, Actuator>,
     schedules: HashMap<u32, Schedule>,
@@ -344,6 +345,8 @@ impl Server {
         let id = self.next_timeslot_id;
         schedule.timeslots.insert(id, TimeSlot::new(enabled, actuator_state, time_period));
         self.next_timeslot_id += 1;
+
+        println!("Added time slot, len = {:?}", schedule.timeslots.len());
 
         Ok(id)
     }

@@ -1,7 +1,7 @@
 use num::Num;
 use std::ops::Shl;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct InclusiveRange<T> {
     pub start: T,
     pub end: T,
@@ -29,7 +29,7 @@ impl<T: PartialOrd + Copy> InclusiveRange<T> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Serialize ,Deserialize, Debug)]
 pub struct ExclusiveRange<T> {
     pub start: T,
     pub end: T,
