@@ -1,31 +1,32 @@
-use std::sync::mpsc;
-use std::thread;
+#![feature(plugin, use_extern_macros, proc_macro_path_invoc)]
+#![plugin(tarpc_plugins)]
+
+#[macro_use]
+extern crate tarpc;
+
+#[macro_use]
+extern crate serde_derive;
+
+extern crate futures;
+extern crate tokio_core;
+
+#[macro_use]
+extern crate bitflags;
+extern crate chrono;
+extern crate num;
+
+mod server;
+mod utils;
+mod rpc;
 
 use tarpc::sync;
 use tarpc::sync::client::ClientExt;
 
 use server::*;
-use rpc::{RpcServer, SyncClient, SyncServiceExt};
+use rpc::{SyncClient};
 
-pub fn test_client() {
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
-        let rpc_server = RpcServer::new();
-
-        let actuator = Actuator {
-            name: "act".to_string(),
-            actuator_type: ActuatorType::Toggle
-        };
-        rpc_server.server.write().unwrap().add_actuator(actuator, ActuatorState::Toggle(false)).unwrap();
-        println!("Server added actuator");
-
-        let handle = rpc_server.listen("localhost:0", sync::server::Options::default())
-            .unwrap();
-        tx.send(handle.addr()).unwrap();
-        handle.run();
-    });
-
-    let client = SyncClient::connect(rx.recv().unwrap(), sync::client::Options::default())
+fn main() {
+    let client = SyncClient::connect("localhost:4242", sync::client::Options::default())
         .unwrap();
 
     // TODO: get actuator list
@@ -45,14 +46,15 @@ pub fn test_client() {
         date_range: DateRange {
             start: Date {
                 year: 2017,
-                month: 5,
+                month: 11,
                 day: 8,
             },
-            end: Date {
-                year: 2017,
-                month: 5,
-                day: 8,
-            },
+            // end: Date {
+                // year: 2017,
+                // month: 5,
+                // day: 8,
+            // },
+            end: Date::MAX,
         },
         days: WeekdaySet::all(),
     };

@@ -27,13 +27,6 @@ pub struct Actuator {
 }
 
 impl Actuator {
-    fn valid(&self) -> bool {
-        match self.actuator_type {
-            ActuatorType::Toggle => true,
-            ActuatorType::FloatValue { min, max } => min < max,
-        }
-    }
-
     fn valid_state(&self, state: &ActuatorState) -> bool {
         match self.actuator_type {
             ActuatorType::Toggle => match state {
@@ -48,6 +41,15 @@ impl Actuator {
     }
 }
 
+impl ValidCheck for Actuator {
+    fn valid(&self) -> bool {
+        match self.actuator_type {
+            ActuatorType::Toggle => true,
+            ActuatorType::FloatValue { min, max } => min < max,
+        }
+    }
+}
+
 // Time constructs.
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, PartialOrd, Debug)]
 pub struct Date {
@@ -57,17 +59,14 @@ pub struct Date {
 }
 
 impl Date {
-    // TODO: split MIN/MAX, handle
-    const NONE: Date = Date { year: 0, month: 0, day: 0 };
+    // Use valid values because it's much easier to handle (no need to special-case).
+    pub const MIN: Date = Date { year: 1970, month: 1, day: 1 };
+    pub const MAX: Date = Date { year: u16::max_value(), month: 12, day: 31 };
 
     fn to_chrono_naive_date(&self) -> Option<::chrono::naive::NaiveDate> {
         ::chrono::naive::NaiveDate::from_ymd_opt(self.year as i32,
                                                self.month as u32,
                                                self.day as u32)
-    }
-
-    fn valid(&self) -> bool {
-        self.to_chrono_naive_date() != None
     }
 
     // Must be a range of valid dates.
@@ -93,6 +92,12 @@ impl Date {
     }
 }
 
+impl ValidCheck for Date {
+    fn valid(&self) -> bool {
+        self.to_chrono_naive_date() != None
+    }
+}
+
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Time {
     pub hour: u8,
@@ -101,7 +106,9 @@ pub struct Time {
 
 impl Time {
     const DAY_START_HOUR: u8 = 4;
+}
 
+impl ValidCheck for Time {
     fn valid(&self) -> bool {
         self.hour < 24 && self.minute < 60
     }
@@ -143,10 +150,6 @@ pub struct TimePeriod {
 }
 
 impl TimePeriod {
-    fn valid(&self) -> bool {
-        self.time_interval.valid() && self.date_range.valid() && !self.days.is_empty()
-    }
-
     fn overlaps_dates(&self, other: &TimePeriod) -> bool {
         if let Some(intersection) = self.date_range.intersection(&other.date_range) {
             if self.days.is_all() && other.days.is_all() {
@@ -166,6 +169,12 @@ impl TimePeriod {
 
     fn overlaps(&self, other: &TimePeriod) -> bool {
         self.overlaps_dates(other) && self.time_interval.overlaps(&other.time_interval)
+    }
+}
+
+impl ValidCheck for TimePeriod {
+    fn valid(&self) -> bool {
+        self.time_interval.valid() && self.date_range.valid() && !self.days.is_empty()
     }
 }
 
@@ -289,13 +298,15 @@ impl Server {
         }
     }
 
+    // Public API (exposed via RPC)
+
     pub fn list_actuators(&self) -> &HashMap<u32, Actuator> {
         &self.actuators
     }
 
-    pub fn get_schedule(&self, actuator_id: u32) -> Result<Schedule> {
+    pub fn get_schedule(&self, actuator_id: u32) -> Result<&Schedule> {
         match self.schedules.get(&actuator_id) {
-            Some(schedule) => Ok(schedule.clone()),
+            Some(schedule) => Ok(&schedule),
             None => Err(InvalidArgument(ActuatorId)),
         }
     }
@@ -489,7 +500,8 @@ impl Server {
         }
     }
 
-    // Internal (not exposed)
+    // Internal API (not exposed via RPC)
+
     pub fn add_actuator(&mut self, actuator: Actuator, default_state: ActuatorState) -> Result<u32> {
         if !(actuator.valid() && actuator.valid_state(&default_state)) {
             return Err(InvalidArgument(ActuatorState))

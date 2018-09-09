@@ -1,6 +1,10 @@
 use num::Num;
 use std::ops::Shl;
 
+pub trait ValidCheck {
+    fn valid(&self) -> bool;
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct InclusiveRange<T> {
     pub start: T,
@@ -8,10 +12,6 @@ pub struct InclusiveRange<T> {
 }
 
 impl<T: PartialOrd + Copy> InclusiveRange<T> {
-    pub fn valid(&self) -> bool {
-        self.start <= self.end
-    }
-
     pub fn overlaps(&self, other: &InclusiveRange<T>) -> bool {
         self.start <= other.end && other.start <= self.end
     }
@@ -29,19 +29,27 @@ impl<T: PartialOrd + Copy> InclusiveRange<T> {
     }
 }
 
-#[derive(Clone, Serialize ,Deserialize, Debug)]
+impl<T: ValidCheck + PartialOrd> ValidCheck for InclusiveRange<T> {
+    fn valid(&self) -> bool {
+        self.start.valid() && self.end.valid() && self.start <= self.end
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ExclusiveRange<T> {
     pub start: T,
     pub end: T,
 }
 
 impl<T: PartialOrd + Copy> ExclusiveRange<T> {
-    pub fn valid(&self) -> bool {
-        self.start < self.end
-    }
-
     pub fn overlaps(&self, other: &ExclusiveRange<T>) -> bool {
         self.start < other.end && other.start < self.end
+    }
+}
+
+impl<T: ValidCheck + PartialOrd> ValidCheck for ExclusiveRange<T> {
+    fn valid(&self) -> bool {
+        self.start.valid() && self.end.valid() && self.start < self.end
     }
 }
 
