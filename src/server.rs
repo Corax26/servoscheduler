@@ -1,9 +1,13 @@
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
+use std::error;
 use std::fmt;
+use std::num;
 use std::result;
+use std::str;
 
 use chrono::Datelike;
+use regex::Regex;
 
 use utils::*;
 
@@ -14,10 +18,40 @@ pub enum ActuatorType {
     FloatValue { min: f64, max: f64 },
 }
 
+impl fmt::Display for ActuatorType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ActuatorType::Toggle => write!(f, "Toggle"),
+            ActuatorType::FloatValue { min, max } => write!(f, "Float [{}, {}]", min, max),
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum ActuatorState {
     Toggle(bool),
     FloatValue(f64),
+}
+
+impl fmt::Display for ActuatorState {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ActuatorState::Toggle(value) => write!(f, "{}", if *value { "On" } else { "Off "}),
+            ActuatorState::FloatValue(value) => write!(f, "{}", value),
+        }
+    }
+}
+
+impl str::FromStr for ActuatorState {
+    type Err = num::ParseFloatError;
+
+    fn from_str(s: &str) -> result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_ref() {
+            "on" => Ok(ActuatorState::Toggle(true)),
+            "off" => Ok(ActuatorState::Toggle(false)),
+            _ => f64::from_str(s).map(|f| ActuatorState::FloatValue(f))
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -51,7 +85,7 @@ impl ValidCheck for Actuator {
 }
 
 // Time constructs.
-#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, PartialOrd, Debug)]
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Debug)]
 pub struct Date {
     pub year: u16,
     pub month: u8,
@@ -62,6 +96,7 @@ impl Date {
     // Use valid values because it's much easier to handle (no need to special-case).
     pub const MIN: Date = Date { year: 1970, month: 1, day: 1 };
     pub const MAX: Date = Date { year: u16::max_value(), month: 12, day: 31 };
+    pub const EMPTY: Date = Date { year: 0, month: 0, day: 0 };
 
     fn to_chrono_naive_date(&self) -> Option<::chrono::naive::NaiveDate> {
         ::chrono::naive::NaiveDate::from_ymd_opt(self.year as i32,
@@ -98,6 +133,37 @@ impl ValidCheck for Date {
     }
 }
 
+impl fmt::Display for Date {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &Date::MIN | &Date::MAX => write!(f, "-"),
+            _ => write!(f, "{:02}/{:02}/{}", self.day, self.month, self.year),
+        }
+    }
+}
+
+impl str::FromStr for Date {
+    type Err = ();
+
+    fn from_str(s: &str) -> result::Result<Self, Self::Err> {
+        let re = Regex::new(r"^(\d+)/(\d+)(?:/(\d+))?$").unwrap();
+        match re.captures(s) {
+            Some(caps) => Ok(Date {
+                year: {
+                    if let Some(year) = caps.get(3) {
+                        u16::from_str(year.as_str()).unwrap()
+                    } else {
+                        ::chrono::offset::Local::now().year() as u16
+                    }
+                },
+                month: u8::from_str(&caps[2]).unwrap(),
+                day: u8::from_str(&caps[1]).unwrap(),
+            }),
+            None => Err(())
+        }
+    }
+}
+
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Time {
     pub hour: u8,
@@ -106,6 +172,7 @@ pub struct Time {
 
 impl Time {
     const DAY_START_HOUR: u8 = 4;
+    pub const EMPTY: Time = Time { hour: 25, minute: 0 };
 }
 
 impl ValidCheck for Time {
@@ -126,6 +193,12 @@ impl PartialOrd for Time {
     }
 }
 
+impl fmt::Display for Time {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:02}:{:02}", self.hour, self.minute)
+    }
+}
+
 bitflags! {
     #[derive(Serialize, Deserialize)]
     pub struct WeekdaySet: u8 {
@@ -139,7 +212,70 @@ bitflags! {
     }
 }
 
+impl WeekdaySet {
+    const TEXT_REPR: [char; 7] = ['M', 'T', 'W', 'T', 'F', 'S' ,'S'];
+}
+
+impl fmt::Display for WeekdaySet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut s = Self::TEXT_REPR.clone();
+        let mut day_bits = self.bits();
+
+        for i in 0..7 {
+            if (day_bits & 1) == 0 {
+                s[i] = '-';
+            }
+            day_bits >>= 1;
+        }
+
+        f.write_str(&s.into_iter().collect::<String>())
+    }
+}
+
+impl str::FromStr for WeekdaySet {
+    type Err = ();
+
+    fn from_str(s: &str) -> result::Result<Self, Self::Err> {
+        if s.len() != 7 {
+            return Err(())
+        }
+
+        let mut day_bits = 0;
+        for (i, c) in s.char_indices() {
+            if c == Self::TEXT_REPR[i] {
+                day_bits |= 1 << i;
+            } else if c != '-' {
+                return Err(());
+            }
+        }
+
+        Ok(WeekdaySet::from_bits(day_bits).unwrap())
+    }
+}
+
 pub type TimeInterval = ExclusiveRange<Time>;
+
+impl str::FromStr for TimeInterval {
+    type Err = ();
+
+    fn from_str(s: &str) -> result::Result<Self, Self::Err> {
+        let re = Regex::new(r"^(\d+):(\d+)-(\d+):(\d+)$").unwrap();
+        match re.captures(s) {
+            Some(caps) => Ok(TimeInterval {
+                start: Time {
+                    hour: u8::from_str(&caps[1]).unwrap(),
+                    minute: u8::from_str(&caps[2]).unwrap(),
+                },
+                end: Time {
+                    hour: u8::from_str(&caps[3]).unwrap(),
+                    minute: u8::from_str(&caps[4]).unwrap(),
+                }
+            }),
+            None => Err(())
+        }
+    }
+}
+
 pub type DateRange = InclusiveRange<Date>;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -183,7 +319,7 @@ pub struct TimeSlot {
     pub enabled: bool,
     pub actuator_state: ActuatorState,
     pub time_period: TimePeriod,
-    pub time_override: HashMap<u32, TimePeriod>,
+    pub time_override: BTreeMap<u32, TimePeriod>,
 }
 
 impl TimeSlot {
@@ -192,7 +328,7 @@ impl TimeSlot {
             enabled,
             actuator_state,
             time_period,
-            time_override: HashMap::new(),
+            time_override: BTreeMap::new(),
         }
     }
 
@@ -215,14 +351,14 @@ impl TimeSlot {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Schedule {
-    pub timeslots: HashMap<u32, TimeSlot>,
+    pub timeslots: BTreeMap<u32, TimeSlot>,
     pub default_state: ActuatorState,
 }
 
 impl Schedule {
     fn new(default_state: ActuatorState) -> Schedule {
         Schedule {
-            timeslots: HashMap::new(),
+            timeslots: BTreeMap::new(),
             default_state
         }
     }
@@ -270,6 +406,12 @@ impl fmt::Display for Error {
     }
 }
 
+impl error::Error for Error {
+    fn cause(&self) -> Option<&error::Error> {
+        None
+    }
+}
+
 impl From<InvalArgError> for Error {
     fn from(error: InvalArgError) -> Self {
         Error::InvalidArgument(error)
@@ -280,8 +422,8 @@ pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Server {
-    actuators: HashMap<u32, Actuator>,
-    schedules: HashMap<u32, Schedule>,
+    actuators: BTreeMap<u32, Actuator>,
+    schedules: BTreeMap<u32, Schedule>,
     next_actuator_id: u32,
     next_timeslot_id: u32,
     next_override_id: u32,
@@ -290,8 +432,8 @@ pub struct Server {
 impl Server {
     pub fn new() -> Server {
         Server {
-            actuators: HashMap::new(),
-            schedules: HashMap::new(),
+            actuators: BTreeMap::new(),
+            schedules: BTreeMap::new(),
             next_actuator_id: 0,
             next_timeslot_id: 0,
             next_override_id: 0,
@@ -300,7 +442,7 @@ impl Server {
 
     // Public API (exposed via RPC)
 
-    pub fn list_actuators(&self) -> &HashMap<u32, Actuator> {
+    pub fn list_actuators(&self) -> &BTreeMap<u32, Actuator> {
         &self.actuators
     }
 
@@ -377,33 +519,52 @@ impl Server {
                                  actuator_id: u32,
                                  time_slot_id: u32,
                                  time_period: TimePeriod) -> Result<()> {
-        if !time_period.valid() {
-            return Err(InvalidArgument(TimePeriod))
-        }
-
         let schedule = self.schedules.get_mut(&actuator_id)
             .ok_or(InvalidArgument(ActuatorId))?;
 
         // Find the matching timeslot and check for overlaps.
-        let mut target_ts: Option<&mut TimeSlot> = None;
+        let mut target_ts: Result<&mut TimeSlot> = Err(InvalidArgument(TimeSlotId));
         for (id, ts) in schedule.timeslots.iter_mut() {
             if *id == time_slot_id {
-                target_ts = Some(ts);
+                target_ts = Ok(ts);
                 continue;
             }
 
             if ts.overlaps(&time_period) {
-                return Err(TimeSlotOverlap(*id))
+                target_ts = Err(TimeSlotOverlap(*id));
+                break;
             }
         }
 
-        if let Some(ts) = target_ts {
-            // All good, modify the timeslot.
-            ts.time_period = time_period;
-            Ok(())
-        } else {
-            Err(InvalidArgument(TimeSlotId))
+        let ts = target_ts?;
+
+        // Update specified fields.
+        let mut new_time_period = ts.time_period.clone();
+
+        if time_period.time_interval.start != Time::EMPTY {
+            new_time_period.time_interval.start = time_period.time_interval.start;
         }
+        if time_period.time_interval.end != Time::EMPTY {
+            new_time_period.time_interval.end = time_period.time_interval.end;
+        }
+        if time_period.date_range.start != Date::EMPTY {
+            new_time_period.date_range.start = time_period.date_range.start;
+        }
+        if time_period.date_range.end != Date::EMPTY {
+            new_time_period.date_range.end = time_period.date_range.end;
+        }
+        if !time_period.days.is_empty() {
+            new_time_period.days = time_period.days;
+        }
+
+        // Check that the specified fields were valid.
+        if !new_time_period.valid() {
+            return Err(InvalidArgument(TimePeriod))
+        }
+
+        // All good, modify the timeslot.
+        ts.time_period = new_time_period;
+        Ok(())
     }
 
     pub fn time_slot_set_enabled(&mut self,

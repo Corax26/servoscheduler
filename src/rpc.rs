@@ -1,16 +1,18 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::{Arc,RwLock};
 
 use server::*;
 
 service! {
-    rpc list_actuators() -> HashMap<u32, Actuator>;
+    // Specifying | Error anyway, because tarpc::util::Never is a pain to handle.
+    rpc list_actuators() -> BTreeMap<u32, Actuator> | Error;
     rpc get_schedule(actuator_id: u32) -> Schedule | Error;
 
     rpc set_default_state(actuator_id: u32, default_state: ActuatorState) -> () | Error;
 
     rpc add_time_slot(actuator_id: u32, time_period: TimePeriod, actuator_state: ActuatorState, enabled: bool) -> u32 | Error;
     rpc remove_time_slot(actuator_id: u32, time_slot_id: u32) -> () | Error;
+    // Allows time_period's fields to be empty.
     rpc time_slot_set_time_period(actuator_id: u32, time_slot_id: u32, time_period: TimePeriod) -> () | Error;
     rpc time_slot_set_enabled(actuator_id: u32, time_slot_id: u32, enabled: bool) -> () | Error;
     rpc time_slot_set_actuator_state(actuator_id: u32, time_slot_id: u32, actuator_state: ActuatorState) -> () | Error;
@@ -31,10 +33,8 @@ impl RpcServer {
     }
 }
 
-type ResultNever<T> = ::std::result::Result<T, ::tarpc::util::Never>;
-
 impl SyncService for RpcServer {
-    fn list_actuators(&self) -> ResultNever<HashMap<u32, Actuator>> {
+    fn list_actuators(&self) -> Result<BTreeMap<u32, Actuator>> {
         Ok(self.server.read().unwrap().list_actuators().clone())
     }
 

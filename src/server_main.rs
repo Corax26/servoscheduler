@@ -15,6 +15,8 @@ extern crate bitflags;
 extern crate chrono;
 extern crate num;
 
+extern crate regex;
+
 // #[macro_use]
 // extern crate log;
 // extern crate env_logger;
@@ -31,12 +33,18 @@ use rpc::{RpcServer, SyncServiceExt};
 fn main() {
     let rpc_server = RpcServer::new();
 
-    let actuator = Actuator {
-        name: "act".to_string(),
-        actuator_type: ActuatorType::Toggle
-    };
-    rpc_server.server.write().unwrap().add_actuator(actuator, ActuatorState::Toggle(false)).unwrap();
-    println!("Server added actuator");
+    {
+        let mut server = rpc_server.server.write().unwrap();
+        server.add_actuator(Actuator {
+            name: "switch".to_string(),
+            actuator_type: ActuatorType::Toggle
+        }, ActuatorState::Toggle(false)).unwrap();
+        server.add_actuator(Actuator {
+            name: "knob".to_string(),
+            actuator_type: ActuatorType::FloatValue { min: 0.0, max: 1.0 }
+        }, ActuatorState::FloatValue(0.5)).unwrap();
+        println!("Server added actuators");
+    }
 
     let handle = rpc_server.listen("localhost:4242", sync::server::Options::default())
         .unwrap();

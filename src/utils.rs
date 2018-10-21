@@ -5,7 +5,7 @@ pub trait ValidCheck {
     fn valid(&self) -> bool;
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
 pub struct InclusiveRange<T> {
     pub start: T,
     pub end: T,
@@ -35,7 +35,7 @@ impl<T: ValidCheck + PartialOrd> ValidCheck for InclusiveRange<T> {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
 pub struct ExclusiveRange<T> {
     pub start: T,
     pub end: T,
