@@ -21,13 +21,16 @@ extern crate regex;
 // extern crate log;
 // extern crate env_logger;
 
-mod server;
-mod utils;
+mod actuator;
 mod rpc;
+mod schedule;
+mod server;
+mod time;
+mod utils;
 
 use tarpc::sync;
 
-use server::*;
+use actuator::*;
 use rpc::{RpcServer, SyncServiceExt};
 
 fn main() {
@@ -35,14 +38,20 @@ fn main() {
 
     {
         let mut server = rpc_server.server.write().unwrap();
-        server.add_actuator(Actuator {
-            name: "switch".to_string(),
-            actuator_type: ActuatorType::Toggle
-        }, ActuatorState::Toggle(false)).unwrap();
-        server.add_actuator(Actuator {
-            name: "knob".to_string(),
-            actuator_type: ActuatorType::FloatValue { min: 0.0, max: 1.0 }
-        }, ActuatorState::FloatValue(0.5)).unwrap();
+        server.add_actuator(Actuator::new(
+            ActuatorInfo {
+                name: "switch".to_string(),
+                actuator_type: ActuatorType::Toggle
+            },
+            ActuatorState::Toggle(false)
+        )).unwrap();
+        server.add_actuator(Actuator::new(
+            ActuatorInfo {
+                name: "knob".to_string(),
+                actuator_type: ActuatorType::FloatValue { min: 0.0, max: 1.0 }
+            },
+            ActuatorState::FloatValue(0.5)
+        )).unwrap();
         println!("Server added actuators");
     }
 

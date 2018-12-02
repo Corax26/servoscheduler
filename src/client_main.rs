@@ -21,9 +21,13 @@ extern crate clap;
 extern crate prettytable;
 extern crate regex;
 
-mod server;
-mod utils;
+mod actuator;
 mod rpc;
+mod schedule;
+// TODO: remove, server::Error (and dependencies) should be moved to rpc
+mod server;
+mod time;
+mod utils;
 
 use std::process;
 use std::result;
@@ -32,10 +36,12 @@ use std::str;
 use tarpc::sync;
 use tarpc::sync::client::ClientExt;
 
-use server::*;
+use actuator::*;
+use schedule::*;
+use time::*;
 use rpc::{SyncClient};
 
-type RpcResult = ::std::result::Result<(), tarpc::Error<Error>>;
+type RpcResult = result::Result<(), tarpc::Error<server::Error>>;
 
 struct TimeslotSpecifier {
     actuator_id: u32,

@@ -1,11 +1,13 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc,RwLock};
 
+use actuator::{ActuatorInfo, ActuatorState};
+use schedule::*;
 use server::*;
 
 service! {
     // Specifying | Error anyway, because tarpc::util::Never is a pain to handle.
-    rpc list_actuators() -> BTreeMap<u32, Actuator> | Error;
+    rpc list_actuators() -> BTreeMap<u32, ActuatorInfo> | Error;
     rpc get_schedule(actuator_id: u32) -> Schedule | Error;
 
     rpc set_default_state(actuator_id: u32, default_state: ActuatorState) -> () | Error;
@@ -20,7 +22,6 @@ service! {
     rpc time_slot_remove_time_override(actuator_id: u32, time_slot_id: u32, time_override_id: u32) -> () | Error;
 }
 
-#[derive(Clone)]
 pub struct RpcServer {
     pub server: Arc<RwLock<Server>>,
 }
@@ -33,9 +34,20 @@ impl RpcServer {
     }
 }
 
+// Implement Clone manually because #[derive] does not use the right bounds and requires Server
+// itself to be clonable (which we don't want to allow here), see:
+// https://github.com/rust-lang/rust/issues/26925
+impl Clone for RpcServer {
+    fn clone(&self) -> Self {
+        RpcServer {
+            server: self.server.clone()
+        }
+    }
+}
+
 impl SyncService for RpcServer {
-    fn list_actuators(&self) -> Result<BTreeMap<u32, Actuator>> {
-        Ok(self.server.read().unwrap().list_actuators().clone())
+    fn list_actuators(&self) -> Result<BTreeMap<u32, ActuatorInfo>> {
+        Ok(self.server.read().unwrap().list_actuators())
     }
 
     fn get_schedule(&self, actuator_id: u32) -> Result<Schedule> {
