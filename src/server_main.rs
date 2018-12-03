@@ -7,8 +7,9 @@ extern crate tarpc;
 #[macro_use]
 extern crate serde_derive;
 
-extern crate futures;
-extern crate tokio_core;
+// Only for FutureService
+// extern crate futures;
+// extern crate tokio_core;
 
 #[macro_use]
 extern crate bitflags;
@@ -23,6 +24,7 @@ extern crate regex;
 
 mod actuator;
 mod rpc;
+mod rpc_server;
 mod schedule;
 mod server;
 mod time;
@@ -31,7 +33,8 @@ mod utils;
 use tarpc::sync;
 
 use actuator::*;
-use rpc::{RpcServer, SyncServiceExt};
+use rpc::SyncServiceExt;
+use rpc_server::RpcServer;
 
 fn main() {
     let rpc_server = RpcServer::new();

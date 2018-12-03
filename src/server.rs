@@ -1,69 +1,14 @@
 use std::collections::BTreeMap;
-use std::error;
-use std::fmt;
 use std::result;
-use std::str;
 
 use actuator::*;
 use schedule::*;
 use time::*;
 use utils::*;
 
-#[derive(Serialize, Deserialize, Debug)]
-pub enum InvalArgError {
-    ActuatorId,
-    TimeSlotId,
-    TimeOverrideId,
-    TimePeriod,
-    ActuatorState,
-}
-use self::InvalArgError as IAE;
-
-impl fmt::Display for InvalArgError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let desc = match *self {
-            IAE::ActuatorId => "actuator ID",
-            IAE::TimeSlotId => "time slot ID",
-            IAE::TimeOverrideId => "time override ID",
-            IAE::TimePeriod => "time period",
-            IAE::ActuatorState => "actuator state",
-        };
-        f.write_str(desc)
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum Error {
-    InvalidArgument(InvalArgError),
-    TimeSlotOverlap(u32),
-    TimeOverrideOverlap(u32),
-}
-use self::Error::*;
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Error::InvalidArgument(ref arg) => write!(f, "invalid argument: {}", arg),
-            Error::TimeSlotOverlap(id) => write!(f, "overlap with time slot (ID {})", id),
-            Error::TimeOverrideOverlap(id) =>
-                write!(f, "overlap with another time override in this slot(ID {})", id),
-        }
-    }
-}
-
-impl error::Error for Error {
-    fn cause(&self) -> Option<&error::Error> {
-        None
-    }
-}
-
-impl From<InvalArgError> for Error {
-    fn from(error: InvalArgError) -> Self {
-        Error::InvalidArgument(error)
-    }
-}
-
-pub type Result<T> = result::Result<T, Error>;
+use rpc::InvalArgError as IAE;
+use rpc::Error::*;
+pub type Result<T> = result::Result<T, ::rpc::Error>;
 
 pub struct Server {
     actuators: BTreeMap<u32, Actuator>,
@@ -322,7 +267,8 @@ impl Server {
     }
 
     // Private
-    // TODO: need to make this more borrow-friendly (nested struct?)
+    // TODO: need to make this more borrow-friendly
+    // Can probably be done by implementing these functions for actuators directly
     /* fn get_mut_schedule(&mut self, actuator_id: u32) -> Result<&mut Schedule> {
         self.schedules.get_mut(&actuator_id)
             .ok_or(InvalidArgument(IAE::ActuatorId))

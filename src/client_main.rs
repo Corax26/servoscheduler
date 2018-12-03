@@ -7,9 +7,6 @@ extern crate tarpc;
 #[macro_use]
 extern crate serde_derive;
 
-extern crate futures;
-extern crate tokio_core;
-
 #[macro_use]
 extern crate bitflags;
 extern crate chrono;
@@ -24,8 +21,6 @@ extern crate regex;
 mod actuator;
 mod rpc;
 mod schedule;
-// TODO: remove, server::Error (and dependencies) should be moved to rpc
-mod server;
 mod time;
 mod utils;
 
@@ -41,7 +36,7 @@ use schedule::*;
 use time::*;
 use rpc::{SyncClient};
 
-type RpcResult = result::Result<(), tarpc::Error<server::Error>>;
+type RpcResult = result::Result<(), tarpc::Error<rpc::Error>>;
 
 struct TimeslotSpecifier {
     actuator_id: u32,
