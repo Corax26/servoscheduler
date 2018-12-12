@@ -65,6 +65,7 @@ service! {
     rpc set_default_state(actuator_id: u32, default_state: ActuatorState) -> () | Error;
 
     rpc add_time_slot(actuator_id: u32, time_period: TimePeriod, actuator_state: ActuatorState, enabled: bool) -> u32 | Error;
+    // TODO: choose one spelling: time_slot or timeslot
     rpc remove_time_slot(actuator_id: u32, time_slot_id: u32) -> () | Error;
     // Allows time_period's fields to be empty.
     rpc time_slot_set_time_period(actuator_id: u32, time_slot_id: u32, time_period: TimePeriod) -> () | Error;

@@ -27,6 +27,7 @@ mod utils;
 use std::process;
 use std::result;
 use std::str;
+use std::str::FromStr;
 
 use tarpc::sync;
 use tarpc::sync::client::ClientExt;
@@ -38,6 +39,20 @@ use rpc::{SyncClient};
 
 type RpcResult = result::Result<(), tarpc::Error<rpc::Error>>;
 
+fn parse_colon_specifier(s: &str, expected_num: usize) -> Option<Vec<u32>> {
+    let ids: Vec<&str> = s.split(':').collect();
+    if ids.len() != expected_num {
+        return None;
+    }
+
+    let vals: Vec<u32> = ids.iter().filter_map(|s| u32::from_str(s).ok()).collect();
+    if vals.len() == expected_num {
+        Some(vals)
+    } else {
+        None
+    }
+}
+
 struct TimeslotSpecifier {
     actuator_id: u32,
     timeslot_id: u32,
@@ -47,19 +62,31 @@ impl str::FromStr for TimeslotSpecifier {
     type Err = ();
 
     fn from_str(s: &str) -> result::Result<Self, Self::Err> {
-        let ids: Vec<&str> = s.split(':').collect();
-        if ids.len() != 2 {
-            return Err(());
-        }
-
-        let vals: Vec<u32> = ids.iter().filter_map(|s| u32::from_str(s).ok()).collect();
-        if vals.len() != 2 {
-            return Err(());
-        }
+        let vals = parse_colon_specifier(s, 2).ok_or(())?;
 
         Ok(TimeslotSpecifier {
             actuator_id: vals[0],
             timeslot_id: vals[1],
+        })
+    }
+}
+
+struct TimeslotOverrideSpecifier {
+    actuator_id: u32,
+    timeslot_id: u32,
+    timeslot_override_id: u32,
+}
+
+impl str::FromStr for TimeslotOverrideSpecifier {
+    type Err = ();
+
+    fn from_str(s: &str) -> result::Result<Self, Self::Err> {
+        let vals = parse_colon_specifier(s, 3).ok_or(())?;
+
+        Ok(TimeslotOverrideSpecifier {
+            actuator_id: vals[0],
+            timeslot_id: vals[1],
+            timeslot_override_id: vals[2],
         })
     }
 }
@@ -155,6 +182,10 @@ fn set_default_state(args: &clap::ArgMatches) -> RpcResult {
 fn show_schedule(args: &clap::ArgMatches) -> RpcResult {
     use prettytable::{Table,format};
 
+    fn time_interval_str(time_period: &TimePeriod) -> String {
+        format!("{} - {}", time_period.time_interval.start, time_period.time_interval.end)
+    }
+
     let actuator_id = value_t_or_exit!(args, "actuator", u32);
 
     let schedule = get_client().get_schedule(actuator_id)?;
@@ -174,13 +205,20 @@ fn show_schedule(args: &clap::ArgMatches) -> RpcResult {
     for (slot_id, slot) in schedule.timeslots.iter() {
         let time_period = &slot.time_period;
         let enabled = if slot.enabled { "Yes" } else { "No" };
-        let time_range = format!("{} - {}", time_period.time_interval.start,
-                                 time_period.time_interval.end);
+        let time_range = time_interval_str(time_period);
 
-        // TODO: override
         table.add_row(row![slot_id, enabled, slot.actuator_state, time_range,
                            time_period.date_range.start, time_period.date_range.end,
                            time_period.days]);
+
+        for (time_override_id, time_period) in slot.time_override.iter() {
+            let id = format!("{} > {}", slot_id, time_override_id);
+            let time_range = time_interval_str(time_period);
+
+            table.add_row(row![id, "-", "-", time_range,
+                               time_period.date_range.start, time_period.date_range.end,
+                               time_period.days]);
+        }
     }
 
     table.printstd();
@@ -192,6 +230,7 @@ fn add_time_slot(args: &clap::ArgMatches) -> RpcResult {
     let actuator_id = value_t_or_exit!(args, "actuator", u32);
     let time_interval = value_t_or_exit!(args, "time-interval", TimeInterval);
     let actuator_state = value_t_or_exit!(args, "state", ActuatorState);
+    // TODO: macro value_t_default_or_exit
     let start_date = if args.is_present("start-date") {
         value_t_or_exit!(args, "start-date", Date)
     } else {
@@ -262,6 +301,14 @@ fn time_slot_set_time_period(args: &clap::ArgMatches) -> RpcResult {
                                            time_period).and(Ok(()))
 }
 
+fn time_slot_set_actuator_state(args: &clap::ArgMatches) -> RpcResult {
+    let specifier = value_t_or_exit!(args, "specifier", TimeslotSpecifier);
+    let actuator_state = value_t_or_exit!(args, "state", ActuatorState);
+
+    get_client().time_slot_set_actuator_state(specifier.actuator_id, specifier.timeslot_id,
+                                              actuator_state).and(Ok(()))
+}
+
 fn time_slot_set_enabled(args: &clap::ArgMatches, enabled: bool) -> RpcResult {
     let specifier = value_t_or_exit!(args, "specifier", TimeslotSpecifier);
 
@@ -269,12 +316,43 @@ fn time_slot_set_enabled(args: &clap::ArgMatches, enabled: bool) -> RpcResult {
                                        enabled).and(Ok(()))
 }
 
-fn time_slot_set_actuator_state(args: &clap::ArgMatches) -> RpcResult {
+fn time_slot_add_time_override(args: &clap::ArgMatches) -> RpcResult {
     let specifier = value_t_or_exit!(args, "specifier", TimeslotSpecifier);
-    let actuator_state = value_t_or_exit!(args, "state", ActuatorState);
+    let time_interval = value_t_or_exit!(args, "time-interval", TimeInterval);
+    let start_date = if args.is_present("start-date") {
+        value_t_or_exit!(args, "start-date", Date)
+    } else {
+        Date::MIN
+    };
+    let end_date = if args.is_present("end-date") {
+        value_t_or_exit!(args, "end-date", Date)
+    } else {
+        Date::MAX
+    };
+    let weekdays = if args.is_present("weekdays") {
+        value_t_or_exit!(args, "weekdays", WeekdaySet)
+    } else {
+        WeekdaySet::all()
+    };
 
-    get_client().time_slot_set_actuator_state(specifier.actuator_id, specifier.timeslot_id,
-                                              actuator_state).and(Ok(()))
+    let time_period = TimePeriod {
+        time_interval: time_interval,
+        date_range: DateRange {
+            start: start_date,
+            end: end_date,
+        },
+        days: weekdays,
+    };
+
+    get_client().time_slot_add_time_override(specifier.actuator_id, specifier.timeslot_id,
+                                             time_period).and(Ok(()))
+}
+
+fn time_slot_remove_time_override(args: &clap::ArgMatches) -> RpcResult {
+    let specifier = value_t_or_exit!(args, "specifier", TimeslotOverrideSpecifier);
+
+    get_client().time_slot_remove_time_override(specifier.actuator_id, specifier.timeslot_id,
+                                                specifier.timeslot_override_id).and(Ok(()))
 }
 
 fn time_slot(args: &clap::ArgMatches) -> RpcResult {
@@ -285,6 +363,8 @@ fn time_slot(args: &clap::ArgMatches) -> RpcResult {
         ("set-state", Some(sub)) => time_slot_set_actuator_state(sub),
         ("disable", Some(sub)) => time_slot_set_enabled(sub, false),
         ("enable", Some(sub)) => time_slot_set_enabled(sub, true),
+        ("add-override", Some(sub)) => time_slot_add_time_override(sub),
+        ("remove-override", Some(sub)) => time_slot_remove_time_override(sub),
         _ => unreachable!(),
     }
 }
@@ -299,16 +379,18 @@ fn main() {
 
     let timeslot_specifier_arg = Arg::with_name("specifier")
         .help("Timeslot specifier, specified as <actuator ID>:<timeslot ID>");
+    let timeslot_override_specifier_arg = Arg::with_name("specifier")
+        .help("Timeslot override specifier, specified as <actuator ID>:<timeslot ID>:<override ID>");
 
     let time_interval_arg = Arg::with_name("time-interval")
         .takes_value(true)
         .help("Time interval, specified as hh:mm-hh:mm");
     let start_date_arg = Arg::with_name("start-date")
         .takes_value(true)
-        .help("Start date, specified as [YYYY-]MM-DD (default: now)");
+        .help("Start date, specified as DD/MM[/YYYY] (default: now)");
     let end_date_arg = Arg::with_name("end-date")
         .takes_value(true)
-        .help("End date, specified as [YYYY-]MM-DD (default: none)");
+        .help("End date, specified as DD/MM[/YYYY] (default: none)");
     let weekdays_arg = Arg::with_name("weekdays")
         .takes_value(true).allow_hyphen_values(true)
         .help("Enable only on certain weekdays, e.g. M----S- for Monday and Saturday (default: all)");
@@ -377,6 +459,30 @@ fn main() {
                 )
             ).subcommand(SubCommand::with_name("enable")
                 .arg(timeslot_specifier_arg.clone()
+                    .required(true)
+                )
+            ).subcommand(SubCommand::with_name("add-override")
+                .arg(timeslot_specifier_arg.clone()
+                    .required(true)
+                ).arg(time_interval_arg.clone()
+                    .required(true)
+                // Require at least one date restriction, otherwise the override would always take
+                // over the normal settings.
+                ).group(ArgGroup::with_name("date-fields")
+                    .multiple(true)
+                    .required(true)
+                ).arg(start_date_arg.clone()
+                    .long("--start-date").short("-s")
+                    .group("date-fields")
+                ).arg(end_date_arg.clone()
+                    .long("--end-date").short("-e")
+                    .group("date-fields")
+                ).arg(weekdays_arg.clone()
+                    .long("--weekdays").short("-w")
+                    .group("date-fields")
+                )
+            ).subcommand(SubCommand::with_name("remove-override")
+                .arg(timeslot_override_specifier_arg.clone()
                     .required(true)
                 )
             )
