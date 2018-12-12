@@ -40,7 +40,7 @@ impl fmt::Display for Error {
             Error::InvalidArgument(ref arg) => write!(f, "invalid argument: {}", arg),
             Error::TimeSlotOverlap(id) => write!(f, "overlap with time slot (ID {})", id),
             Error::TimeOverrideOverlap(id) =>
-                write!(f, "overlap with another time override in this slot(ID {})", id),
+                write!(f, "overlap with another time override in this slot (ID {})", id),
         }
     }
 }

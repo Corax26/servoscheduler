@@ -209,9 +209,10 @@ impl Server {
         }
 
         if let Some(ts) = target_ts {
-            // Also check there is no overlap with other overrides.
+            // Also check there is no overlap with other overrides. The requirement is stronger:
+            // two overrides cannot apply to the same day (not just day and time).
             for (id, or) in ts.time_override.iter() {
-                if or.overlaps(&time_period) {
+                if or.overlaps_dates(&time_period) {
                     return Err(TimeOverrideOverlap(*id))
                 }
             }

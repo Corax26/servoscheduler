@@ -12,7 +12,7 @@ pub struct TimePeriod {
 }
 
 impl TimePeriod {
-    fn overlaps_dates(&self, other: &TimePeriod) -> bool {
+    pub fn overlaps_dates(&self, other: &TimePeriod) -> bool {
         if let Some(intersection) = self.date_range.intersection(&other.date_range) {
             if self.days.is_all() && other.days.is_all() {
                 // Fast path: both repeat every day, no need to check weekdays.
