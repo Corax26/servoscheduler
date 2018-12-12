@@ -76,13 +76,15 @@ impl str::FromStr for Date {
             Some(caps) => Ok(Date {
                 year: {
                     if let Some(year) = caps.get(3) {
-                        u16::from_str(year.as_str()).unwrap()
+                        // We need to handle the error case, because although the regex validates that
+                        // the capture is an integer, it may not be representable as u8.
+                        u16::from_str(year.as_str()).or(Err(()))?
                     } else {
                         ::chrono::offset::Local::now().year() as u16
                     }
                 },
-                month: u8::from_str(&caps[2]).unwrap(),
-                day: u8::from_str(&caps[1]).unwrap(),
+                month: u8::from_str(&caps[2]).or(Err(()))?,
+                day: u8::from_str(&caps[1]).or(Err(()))?,
             }),
             None => Err(())
         }
