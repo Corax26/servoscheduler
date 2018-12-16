@@ -3,8 +3,13 @@ use std::num;
 use std::result;
 use std::str;
 
-use schedule::Schedule;
+use schedule::*;
+use time::*;
 use utils::*;
+
+use rpc::InvalArgError as IAE;
+use rpc::Error::*;
+pub type Result<T> = result::Result<T, ::rpc::Error>;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum ActuatorType {
@@ -65,10 +70,12 @@ impl ValidCheck for ActuatorInfo {
 
 pub struct Actuator{
     pub info: ActuatorInfo,
-    // TODO: make private, and move the implementation of methods from Server to here (allowing
-    // to modify the actuator's internal state)
-    pub schedule: Schedule,
+
+    schedule: Schedule,
     // rest: internals
+    next_timeslot_id: u32,
+    // TODO: would be nice to be per-timeslot, but shouldn't be exposed via RPC either...
+    next_override_id: u32,
 }
 
 impl Actuator {
@@ -76,10 +83,182 @@ impl Actuator {
         Actuator {
             info,
             schedule: Schedule::new(default_state),
+            next_timeslot_id: 0,
+            next_override_id: 0,
         }
     }
 
-    pub fn valid_state(&self, state: &ActuatorState) -> bool {
+    pub fn schedule(&self) -> &Schedule {
+        &self.schedule
+    }
+
+    pub fn set_default_state(&mut self, default_state: ActuatorState) -> Result<()> {
+        if !self.valid_state(&default_state) {
+            return Err(InvalidArgument(IAE::ActuatorState))
+        }
+
+        self.schedule.default_state = default_state;
+        Ok(())
+    }
+
+    pub fn add_time_slot(&mut self,
+                         time_period: TimePeriod,
+                         actuator_state: ActuatorState,
+                         enabled: bool) -> Result<u32> {
+        if !time_period.valid() {
+            return Err(InvalidArgument(IAE::TimePeriod))
+        }
+
+        if !self.valid_state(&actuator_state) {
+            return Err(InvalidArgument(IAE::ActuatorState))
+        }
+
+        // Check for overlaps.
+        for (id, ts) in self.schedule.timeslots.iter() {
+            if ts.overlaps(&time_period) {
+                return Err(TimeSlotOverlap(*id))
+            }
+        }
+
+        // All good, insert the timeslot.
+        let id = self.next_timeslot_id;
+        self.schedule.timeslots.insert(id, TimeSlot::new(enabled, actuator_state, time_period));
+        self.next_timeslot_id += 1;
+
+        println!("Added time slot, len = {:?}", self.schedule.timeslots.len());
+
+        Ok(id)
+    }
+
+    pub fn remove_time_slot(&mut self, time_slot_id: u32) -> Result<()> {
+        if self.schedule.timeslots.remove(&time_slot_id).is_some() {
+            Ok(())
+        } else {
+            Err(InvalidArgument(IAE::TimeSlotId))
+        }
+    }
+
+    pub fn time_slot_set_time_period(&mut self, time_slot_id: u32,
+                                     time_period: TimePeriod) -> Result<()> {
+        // Find the matching timeslot and check for overlaps.
+        let mut target_ts: Result<&mut TimeSlot> = Err(InvalidArgument(IAE::TimeSlotId));
+        for (id, ts) in self.schedule.timeslots.iter_mut() {
+            if *id == time_slot_id {
+                target_ts = Ok(ts);
+                continue;
+            }
+
+            if ts.overlaps(&time_period) {
+                target_ts = Err(TimeSlotOverlap(*id));
+                break;
+            }
+        }
+
+        let ts = target_ts?;
+
+        // Update specified fields.
+        let mut new_time_period = ts.time_period.clone();
+
+        if time_period.time_interval.start != Time::EMPTY {
+            new_time_period.time_interval.start = time_period.time_interval.start;
+        }
+        if time_period.time_interval.end != Time::EMPTY {
+            new_time_period.time_interval.end = time_period.time_interval.end;
+        }
+        if time_period.date_range.start != Date::EMPTY {
+            new_time_period.date_range.start = time_period.date_range.start;
+        }
+        if time_period.date_range.end != Date::EMPTY {
+            new_time_period.date_range.end = time_period.date_range.end;
+        }
+        if !time_period.days.is_empty() {
+            new_time_period.days = time_period.days;
+        }
+
+        // Check that the specified fields were valid.
+        if !new_time_period.valid() {
+            return Err(InvalidArgument(IAE::TimePeriod))
+        }
+
+        // All good, modify the timeslot.
+        ts.time_period = new_time_period;
+        Ok(())
+    }
+
+    pub fn time_slot_set_enabled(&mut self, time_slot_id: u32,
+                                 enabled: bool) -> Result<()> {
+        let time_slot = self.schedule.timeslots.get_mut(&time_slot_id)
+            .ok_or(InvalidArgument(IAE::TimeSlotId))?;
+
+        time_slot.enabled = enabled;
+        Ok(())
+    }
+
+    pub fn time_slot_set_actuator_state(&mut self, time_slot_id: u32,
+                                        actuator_state: ActuatorState) -> Result<()> {
+        if !self.valid_state(&actuator_state) {
+            return Err(InvalidArgument(IAE::ActuatorState))
+        }
+
+        let time_slot = self.schedule.timeslots.get_mut(&time_slot_id)
+            .ok_or(InvalidArgument(IAE::TimeSlotId))?;
+
+        time_slot.actuator_state = actuator_state;
+        Ok(())
+    }
+
+    pub fn time_slot_add_time_override(&mut self, time_slot_id: u32,
+                                       time_period: TimePeriod) -> Result<u32> {
+        if !time_period.valid() {
+            return Err(InvalidArgument(IAE::TimePeriod))
+        }
+
+        // Find the matching timeslot and check for overlaps.
+        let mut target_ts: Option<&mut TimeSlot> = None;
+        for (id, ts) in self.schedule.timeslots.iter_mut() {
+            if *id == time_slot_id {
+                target_ts = Some(ts);
+                continue;
+            }
+
+            if ts.overlaps(&time_period) {
+                return Err(TimeSlotOverlap(*id))
+            }
+        }
+
+        if let Some(ts) = target_ts {
+            // Also check there is no overlap with other overrides. The requirement is stronger:
+            // two overrides cannot apply to the same day (not just day and time).
+            for (id, or) in ts.time_override.iter() {
+                if or.overlaps_dates(&time_period) {
+                    return Err(TimeOverrideOverlap(*id))
+                }
+            }
+
+            // All good, add the override.
+            let id = self.next_override_id;
+            ts.time_override.insert(id, time_period);
+            self.next_override_id += 1;
+
+            Ok(id)
+        } else {
+            Err(InvalidArgument(IAE::TimeSlotId))
+        }
+    }
+
+    pub fn time_slot_remove_time_override(&mut self, time_slot_id: u32,
+                                          time_override_id: u32) -> Result<()> {
+        let time_slot = self.schedule.timeslots.get_mut(&time_slot_id)
+            .ok_or(InvalidArgument(IAE::TimeSlotId))?;
+
+        if time_slot.time_override.remove(&time_override_id).is_some() {
+            Ok(())
+        } else {
+            Err(InvalidArgument(IAE::TimeOverrideId))
+        }
+    }
+
+    fn valid_state(&self, state: &ActuatorState) -> bool {
         match self.info.actuator_type {
             ActuatorType::Toggle => match state {
                 &ActuatorState::Toggle(_) => true,
