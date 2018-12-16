@@ -72,10 +72,23 @@ pub struct Actuator{
     pub info: ActuatorInfo,
 
     schedule: Schedule,
-    // rest: internals
     next_timeslot_id: u32,
     // TODO: would be nice to be per-timeslot, but shouldn't be exposed via RPC either...
     next_override_id: u32,
+
+    // Next steps:
+    // 1. Remove Schedule indirection: put timeslots and default_state in Actuator, change RPC
+    // accordingly
+    // 2. Create new Schedule struct, representing an actual schedule (X days of time periods in
+    //    chronological order, starting from now - no time period in the past)
+    // 3. Implement management methods:
+    //    - initialise from timeslot list
+    //    - update on timeslot modifications
+    //    - ?
+    // 4. Add schedule_cache field to Actuator (14 days by default?), call schedule_cache's
+    //    management methods from corresponding methods
+    // 5. Add RPC for getting the schedule for the next X days (with some limit), and possibly
+    //    between two dates (less urgent)
 }
 
 impl Actuator {
