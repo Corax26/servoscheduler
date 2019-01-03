@@ -34,8 +34,12 @@ impl SyncService for RpcServer {
         Ok(self.server.read().unwrap().list_actuators())
     }
 
-    fn get_schedule(&self, actuator_id: u32) -> Result<Schedule> {
-        self.server.read().unwrap().get_schedule(actuator_id).map(|s| s.clone())
+    fn list_timeslots(&self, actuator_id: u32) -> Result<BTreeMap<u32, TimeSlot>> {
+        self.server.read().unwrap().list_timeslots(actuator_id).map(|t| t.clone())
+    }
+
+    fn get_default_state(&self, actuator_id: u32) -> Result<ActuatorState> {
+        self.server.read().unwrap().get_default_state(actuator_id).map(|d| d.clone())
     }
 
     fn set_default_state(&self, actuator_id: u32, default_state: ActuatorState) -> Result<()> {

@@ -30,11 +30,14 @@ impl Server {
         self.actuators.iter().map(|(id, a)| (*id, a.info.clone())).collect()
     }
 
-    pub fn get_schedule(&self, actuator_id: u32) -> Result<&Schedule> {
-        match self.actuators.get(&actuator_id) {
-            Some(actuator) => Ok(actuator.schedule()),
-            None => Err(InvalidArgument(IAE::ActuatorId)),
-        }
+    pub fn list_timeslots(&self, actuator_id: u32) -> Result<&BTreeMap<u32, TimeSlot>> {
+        self.actuator(actuator_id)
+            .map(|a| a.timeslots())
+    }
+
+    pub fn get_default_state(&self, actuator_id: u32) -> Result<&ActuatorState> {
+        self.actuator(actuator_id)
+            .map(|a| a.default_state())
     }
 
     pub fn set_default_state(&mut self,
@@ -120,8 +123,11 @@ impl Server {
         }
     }
 
+    fn actuator(&self, actuator_id: u32) -> Result<&Actuator> {
+        self.actuators.get(&actuator_id).ok_or(InvalidArgument(IAE::ActuatorId))
+    }
+
     fn mut_actuator(&mut self, actuator_id: u32) -> Result<&mut Actuator> {
-        self.actuators.get_mut(&actuator_id)
-            .ok_or(InvalidArgument(IAE::ActuatorId))
+        self.actuators.get_mut(&actuator_id).ok_or(InvalidArgument(IAE::ActuatorId))
     }
 }

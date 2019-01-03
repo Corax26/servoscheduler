@@ -172,14 +172,7 @@ fn list_actuators() -> RpcResult {
     Ok(())
 }
 
-fn set_default_state(args: &clap::ArgMatches) -> RpcResult {
-    let actuator_id = value_t_or_exit!(args, "actuator", u32);
-    let actuator_state = value_t_or_exit!(args, "state", ActuatorState);
-
-    get_client().set_default_state(actuator_id, actuator_state).and(Ok(()))
-}
-
-fn show_schedule(args: &clap::ArgMatches) -> RpcResult {
+fn list_time_slots(args: &clap::ArgMatches) -> RpcResult {
     use prettytable::{Table,format};
 
     fn time_interval_str(time_period: &TimePeriod) -> String {
@@ -188,11 +181,9 @@ fn show_schedule(args: &clap::ArgMatches) -> RpcResult {
 
     let actuator_id = value_t_or_exit!(args, "actuator", u32);
 
-    let schedule = get_client().get_schedule(actuator_id)?;
+    let timeslots = get_client().list_timeslots(actuator_id)?;
 
-    println!("Default state: {}", schedule.default_state);
-
-    if schedule.timeslots.is_empty() {
+    if timeslots.is_empty() {
         println!("No timeslot configured");
         return Ok(())
     }
@@ -202,7 +193,7 @@ fn show_schedule(args: &clap::ArgMatches) -> RpcResult {
     table.set_titles(row![b => "Timeslot ID", "Enabled", "Actuator state", "Time range",
                           "Start date", "End date", "Days"]);
 
-    for (slot_id, slot) in schedule.timeslots.iter() {
+    for (slot_id, slot) in timeslots.iter() {
         let time_period = &slot.time_period;
         let enabled = if slot.enabled { "Yes" } else { "No" };
         let time_range = time_interval_str(time_period);
@@ -357,6 +348,7 @@ fn time_slot_remove_time_override(args: &clap::ArgMatches) -> RpcResult {
 
 fn time_slot(args: &clap::ArgMatches) -> RpcResult {
     match args.subcommand() {
+        ("list", Some(sub)) => list_time_slots(sub),
         ("add", Some(sub)) => add_time_slot(sub),
         ("remove", Some(sub)) => remove_time_slot(sub),
         ("set-time", Some(sub)) => time_slot_set_time_period(sub),
@@ -366,6 +358,24 @@ fn time_slot(args: &clap::ArgMatches) -> RpcResult {
         ("add-override", Some(sub)) => time_slot_add_time_override(sub),
         ("remove-override", Some(sub)) => time_slot_remove_time_override(sub),
         _ => unreachable!(),
+    }
+}
+
+fn default_state(args: &clap::ArgMatches) -> RpcResult {
+    let sub = match args.subcommand() {
+        ("get", Some(sub)) => sub,
+        ("set", Some(sub)) => sub,
+        _ => unreachable!(),
+    };
+
+    let actuator_id = value_t_or_exit!(sub, "actuator", u32);
+
+    if sub.is_present("state") {
+        let actuator_state = value_t_or_exit!(sub, "state", ActuatorState);
+        get_client().set_default_state(actuator_id, actuator_state).and(Ok(()))
+    } else {
+        println!("{}", get_client().get_default_state(actuator_id)?);
+        Ok(())
     }
 }
 
@@ -399,19 +409,26 @@ fn main() {
         .about("CLI for ServoScheduler")
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .subcommand(SubCommand::with_name("list-actuators")
-        ).subcommand(SubCommand::with_name("show-schedule")
-            .arg(actuator_arg.clone()
-                .required(true)
-            )
-        ).subcommand(SubCommand::with_name("set-default-state")
-            .arg(actuator_arg.clone()
-                .required(true)
-            ).arg(actuator_state_arg.clone()
-                .required(true)
+        ).subcommand(SubCommand::with_name("default-state")
+            .setting(AppSettings::SubcommandRequiredElseHelp)
+            .subcommand(SubCommand::with_name("get")
+                .arg(actuator_arg.clone()
+                    .required(true)
+                )
+            ).subcommand(SubCommand::with_name("set")
+                .arg(actuator_arg.clone()
+                    .required(true)
+                ).arg(actuator_state_arg.clone()
+                    .required(true)
+                )
             )
         ).subcommand(SubCommand::with_name("timeslot")
             .setting(AppSettings::SubcommandRequiredElseHelp)
-            .subcommand(SubCommand::with_name("add")
+            .subcommand(SubCommand::with_name("list")
+                .arg(actuator_arg.clone()
+                    .required(true)
+                )
+            ).subcommand(SubCommand::with_name("add")
                 .arg(actuator_arg.clone()
                     .required(true)
                 ).arg(time_interval_arg.clone()
@@ -491,9 +508,8 @@ fn main() {
 
     let res = match args.subcommand() {
         ("list-actuators", Some(_)) => list_actuators(),
-        ("show-schedule", Some(sub)) => show_schedule(sub),
-        ("set-default-state", Some(sub)) => set_default_state(sub),
         ("timeslot", Some(sub)) => time_slot(sub),
+        ("default-state", Some(sub)) => default_state(sub),
         ("test", Some(_)) => test(),
         _ => unreachable!(),
     };

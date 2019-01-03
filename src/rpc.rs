@@ -60,8 +60,9 @@ impl From<InvalArgError> for Error {
 service! {
     // Specifying | Error anyway, because tarpc::util::Never is a pain to handle.
     rpc list_actuators() -> BTreeMap<u32, ActuatorInfo> | Error;
-    rpc get_schedule(actuator_id: u32) -> Schedule | Error;
+    rpc list_timeslots(actuator_id: u32) -> BTreeMap<u32, TimeSlot> | Error;
 
+    rpc get_default_state(actuator_id: u32) -> ActuatorState | Error;
     rpc set_default_state(actuator_id: u32, default_state: ActuatorState) -> () | Error;
 
     rpc add_time_slot(actuator_id: u32, time_period: TimePeriod, actuator_state: ActuatorState, enabled: bool) -> u32 | Error;

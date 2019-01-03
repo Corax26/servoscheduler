@@ -74,18 +74,3 @@ impl TimeSlot {
         return false
     }
 }
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct Schedule {
-    pub timeslots: BTreeMap<u32, TimeSlot>,
-    pub default_state: ActuatorState,
-}
-
-impl Schedule {
-    pub fn new(default_state: ActuatorState) -> Schedule {
-        Schedule {
-            timeslots: BTreeMap::new(),
-            default_state
-        }
-    }
-}

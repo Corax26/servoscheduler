@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt;
 use std::num;
 use std::result;
@@ -71,13 +72,15 @@ impl ValidCheck for ActuatorInfo {
 pub struct Actuator{
     pub info: ActuatorInfo,
 
-    schedule: Schedule,
+    timeslots: BTreeMap<u32, TimeSlot>,
+    default_state: ActuatorState,
+
     next_timeslot_id: u32,
     // TODO: would be nice to be per-timeslot, but shouldn't be exposed via RPC either...
     next_override_id: u32,
 
     // Next steps:
-    // 1. Remove Schedule indirection: put timeslots and default_state in Actuator, change RPC
+    // [✓] 1. Remove Schedule indirection: put timeslots and default_state in Actuator, change RPC
     // accordingly
     // 2. Create new Schedule struct, representing an actual schedule (X days of time periods in
     //    chronological order, starting from now - no time period in the past)
@@ -95,14 +98,19 @@ impl Actuator {
     pub fn new(info: ActuatorInfo, default_state: ActuatorState) -> Actuator {
         Actuator {
             info,
-            schedule: Schedule::new(default_state),
+            timeslots: BTreeMap::new(),
+            default_state,
             next_timeslot_id: 0,
             next_override_id: 0,
         }
     }
 
-    pub fn schedule(&self) -> &Schedule {
-        &self.schedule
+    pub fn timeslots(&self) -> &BTreeMap<u32, TimeSlot> {
+        &self.timeslots
+    }
+
+    pub fn default_state(&self) -> &ActuatorState {
+        &self.default_state
     }
 
     pub fn set_default_state(&mut self, default_state: ActuatorState) -> Result<()> {
@@ -110,7 +118,7 @@ impl Actuator {
             return Err(InvalidArgument(IAE::ActuatorState))
         }
 
-        self.schedule.default_state = default_state;
+        self.default_state = default_state;
         Ok(())
     }
 
@@ -127,7 +135,7 @@ impl Actuator {
         }
 
         // Check for overlaps.
-        for (id, ts) in self.schedule.timeslots.iter() {
+        for (id, ts) in self.timeslots.iter() {
             if ts.overlaps(&time_period) {
                 return Err(TimeSlotOverlap(*id))
             }
@@ -135,16 +143,16 @@ impl Actuator {
 
         // All good, insert the timeslot.
         let id = self.next_timeslot_id;
-        self.schedule.timeslots.insert(id, TimeSlot::new(enabled, actuator_state, time_period));
+        self.timeslots.insert(id, TimeSlot::new(enabled, actuator_state, time_period));
         self.next_timeslot_id += 1;
 
-        println!("Added time slot, len = {:?}", self.schedule.timeslots.len());
+        println!("Added time slot, len = {:?}", self.timeslots.len());
 
         Ok(id)
     }
 
     pub fn remove_time_slot(&mut self, time_slot_id: u32) -> Result<()> {
-        if self.schedule.timeslots.remove(&time_slot_id).is_some() {
+        if self.timeslots.remove(&time_slot_id).is_some() {
             Ok(())
         } else {
             Err(InvalidArgument(IAE::TimeSlotId))
@@ -155,7 +163,7 @@ impl Actuator {
                                      time_period: TimePeriod) -> Result<()> {
         // Find the matching timeslot and check for overlaps.
         let mut target_ts: Result<&mut TimeSlot> = Err(InvalidArgument(IAE::TimeSlotId));
-        for (id, ts) in self.schedule.timeslots.iter_mut() {
+        for (id, ts) in self.timeslots.iter_mut() {
             if *id == time_slot_id {
                 target_ts = Ok(ts);
                 continue;
@@ -200,7 +208,7 @@ impl Actuator {
 
     pub fn time_slot_set_enabled(&mut self, time_slot_id: u32,
                                  enabled: bool) -> Result<()> {
-        let time_slot = self.schedule.timeslots.get_mut(&time_slot_id)
+        let time_slot = self.timeslots.get_mut(&time_slot_id)
             .ok_or(InvalidArgument(IAE::TimeSlotId))?;
 
         time_slot.enabled = enabled;
@@ -213,7 +221,7 @@ impl Actuator {
             return Err(InvalidArgument(IAE::ActuatorState))
         }
 
-        let time_slot = self.schedule.timeslots.get_mut(&time_slot_id)
+        let time_slot = self.timeslots.get_mut(&time_slot_id)
             .ok_or(InvalidArgument(IAE::TimeSlotId))?;
 
         time_slot.actuator_state = actuator_state;
@@ -228,7 +236,7 @@ impl Actuator {
 
         // Find the matching timeslot and check for overlaps.
         let mut target_ts: Option<&mut TimeSlot> = None;
-        for (id, ts) in self.schedule.timeslots.iter_mut() {
+        for (id, ts) in self.timeslots.iter_mut() {
             if *id == time_slot_id {
                 target_ts = Some(ts);
                 continue;
@@ -261,7 +269,7 @@ impl Actuator {
 
     pub fn time_slot_remove_time_override(&mut self, time_slot_id: u32,
                                           time_override_id: u32) -> Result<()> {
-        let time_slot = self.schedule.timeslots.get_mut(&time_slot_id)
+        let time_slot = self.timeslots.get_mut(&time_slot_id)
             .ok_or(InvalidArgument(IAE::TimeSlotId))?;
 
         if time_slot.time_override.remove(&time_override_id).is_some() {
@@ -287,6 +295,6 @@ impl Actuator {
 
 impl ValidCheck for Actuator {
     fn valid(&self) -> bool {
-        self.info.valid() && self.valid_state(&self.schedule.default_state)
+        self.info.valid() && self.valid_state(&self.default_state)
     }
 }
