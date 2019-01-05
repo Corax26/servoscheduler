@@ -3,7 +3,7 @@ use std::sync::{Arc,RwLock};
 
 use actuator::{ActuatorInfo, ActuatorState};
 use rpc::SyncService;
-use schedule::*;
+use time_slot::*;
 use server::*;
 
 pub struct RpcServer {

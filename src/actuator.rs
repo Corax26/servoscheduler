@@ -4,8 +4,8 @@ use std::num;
 use std::result;
 use std::str;
 
-use schedule::*;
 use time::*;
+use time_slot::*;
 use utils::*;
 
 use rpc::InvalArgError as IAE;

@@ -25,9 +25,9 @@ extern crate regex;
 mod actuator;
 mod rpc;
 mod rpc_server;
-mod schedule;
 mod server;
 mod time;
+mod time_slot;
 mod utils;
 
 use tarpc::sync;

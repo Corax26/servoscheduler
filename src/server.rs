@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::result;
 
 use actuator::*;
-use schedule::*;
+use time_slot::*;
 use utils::*;
 
 use rpc::InvalArgError as IAE;

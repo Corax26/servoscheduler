@@ -20,8 +20,8 @@ extern crate regex;
 
 mod actuator;
 mod rpc;
-mod schedule;
 mod time;
+mod time_slot;
 mod utils;
 
 use std::process;
@@ -33,7 +33,7 @@ use tarpc::sync;
 use tarpc::sync::client::ClientExt;
 
 use actuator::*;
-use schedule::*;
+use time_slot::*;
 use time::*;
 use rpc::{SyncClient};
 

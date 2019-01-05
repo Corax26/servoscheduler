@@ -3,7 +3,7 @@ use std::error;
 use std::fmt;
 
 use actuator::{ActuatorInfo, ActuatorState};
-use schedule::*;
+use time_slot::*;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum InvalArgError {
