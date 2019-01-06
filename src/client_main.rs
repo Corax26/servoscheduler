@@ -119,19 +119,11 @@ fn test() -> RpcResult {
             },
         },
         date_range: DateRange {
-            start: Date {
-                year: 2017,
-                month: 11,
-                day: 6,
-            },
-            end: Date {
-                year: 2017,
-                month: 11,
-                day: 6,
-            },
+            start: Date::from_ymd(2017, 11, 6).unwrap(),
+            end: Date::from_ymd(2017, 11, 6).unwrap(),
             // end: Date::MAX,
         },
-        days: WeekdaySet::TUESDAY | WeekdaySet::SATURDAY,
+        days: WeekdaySet::MONDAY | WeekdaySet::SATURDAY,
     };
 
     let _time_slot_id = client.add_time_slot(actuator_id, time_period.clone(),
@@ -266,12 +258,12 @@ fn time_slot_set_time_period(args: &clap::ArgMatches) -> RpcResult {
     let start_date = if args.is_present("start-date") {
         value_t_or_exit!(args, "start-date", Date)
     } else {
-        Date::EMPTY
+        Date::empty_date()
     };
     let end_date = if args.is_present("end-date") {
         value_t_or_exit!(args, "end-date", Date)
     } else {
-        Date::EMPTY
+        Date::empty_date()
     };
     let weekdays = if args.is_present("weekdays") {
         value_t_or_exit!(args, "weekdays", WeekdaySet)

@@ -82,6 +82,13 @@ pub struct Actuator{
     // Next steps:
     // [✓] 1. Remove Schedule indirection: put timeslots and default_state in Actuator, change RPC
     // accordingly
+    // [Drop the cache. Difficult to make sure it's always consistent and has no extraneous entry.]
+    // 2. Create new Schedule struct, representing an actual schedule (X days of time periods in
+    //    chronological order)
+    // 3. Implement method to create a schedule from a timeslot list and a date range.
+    // 4. Add RPC for getting the schedule for the next X days (with some limit), and possibly
+    //    between two dates (less urgent).
+    // //////
     // 2. Create new Schedule struct, representing an actual schedule (X days of time periods in
     //    chronological order, starting from now - no time period in the past)
     // 3. Implement management methods:
@@ -186,10 +193,10 @@ impl Actuator {
         if time_period.time_interval.end != Time::EMPTY {
             new_time_period.time_interval.end = time_period.time_interval.end;
         }
-        if time_period.date_range.start != Date::EMPTY {
+        if time_period.date_range.start != Date::empty_date() {
             new_time_period.date_range.start = time_period.date_range.start;
         }
-        if time_period.date_range.end != Date::EMPTY {
+        if time_period.date_range.end != Date::empty_date() {
             new_time_period.date_range.end = time_period.date_range.end;
         }
         if !time_period.days.is_empty() {

@@ -3,6 +3,7 @@ use std::fmt;
 use std::result;
 use std::str;
 
+use chrono;
 use chrono::Datelike;
 use regex::Regex;
 
@@ -10,32 +11,91 @@ use utils::*;
 
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Debug)]
 pub struct Date {
-    pub year: u16,
-    pub month: u8,
-    pub day: u8,
+    // Use chrono's representation, because it makes it much easier to manipulate the date and
+    // provides fast access to metadata (like weekday).
+    chrono_date: chrono::NaiveDate,
 }
 pub type DateRange = InclusiveRange<Date>;
 
 impl Date {
     // Use valid values because it's much easier to handle (no need to special-case).
-    pub const MIN: Date = Date { year: 1970, month: 1, day: 1 };
-    pub const MAX: Date = Date { year: u16::max_value(), month: 12, day: 31 };
-    // Not a valid value (self.valid() == false).
-    pub const EMPTY: Date = Date { year: 0, month: 0, day: 0 };
-
-    fn to_chrono_naive_date(&self) -> Option<::chrono::naive::NaiveDate> {
-        ::chrono::naive::NaiveDate::from_ymd_opt(self.year as i32,
-                                               self.month as u32,
-                                               self.day as u32)
+    pub const MIN: Date = Date { chrono_date: chrono::naive::MIN_DATE };
+    pub const MAX: Date = Date { chrono_date: chrono::naive::MAX_DATE };
+    // This is rather arbitrary. Ideally it would be an invalid value, but chrono does not allow
+    // this. It also cannot be implemented as a const member, because ::from_yo() is not a constant
+    // function.
+    pub fn empty_date() -> Date {
+        Date::from(chrono::NaiveDate::from_yo(1, 1))
     }
 
-    // Must be a range of valid dates.
-    pub fn weekday_set(range: &DateRange) -> WeekdaySet {
-        let start_naive_date = range.start.to_chrono_naive_date().unwrap();
-        let end_naive_date = range.end.to_chrono_naive_date().unwrap();
+    pub fn from_ymd(year: i32, month: u32, day: u32) -> Option<Date> {
+        chrono::NaiveDate::from_ymd_opt(year, month, day).map(|cd| Date::from(cd))
+    }
 
-        let start_day = start_naive_date.weekday().num_days_from_monday();
-        let num_day_diff = end_naive_date.signed_duration_since(start_naive_date).num_days() as u32;
+    pub fn year(&self) -> i32 {
+        self.chrono_date.year()
+    }
+
+    pub fn month(&self) -> u32 {
+        self.chrono_date.month()
+    }
+
+    pub fn day(&self) -> u32 {
+        self.chrono_date.day()
+    }
+
+}
+
+impl From<chrono::NaiveDate> for Date {
+    fn from(chrono_date: chrono::NaiveDate) -> Self {
+        Date { chrono_date }
+    }
+}
+
+impl ValidCheck for Date {
+    fn valid(&self) -> bool {
+        *self != Date::empty_date()
+    }
+}
+
+impl fmt::Display for Date {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &Date::MIN | &Date::MAX => write!(f, "-"),
+            _ => write!(f, "{:02}/{:02}/{}", self.day(), self.month(), self.year()),
+        }
+    }
+}
+
+impl str::FromStr for Date {
+    type Err = ();
+
+    fn from_str(s: &str) -> result::Result<Self, Self::Err> {
+        let re = Regex::new(r"^(\d+)/(\d+)(?:/(\d+))?$").unwrap();
+        match re.captures(s) {
+            Some(caps) => Date::from_ymd(
+                {
+                    if let Some(year) = caps.get(3) {
+                        // We need to handle the error case, because although the regex validates that
+                        // the capture is an integer, it may not be representable as u8.
+                        i32::from_str(year.as_str()).or(Err(()))?
+                    } else {
+                        chrono::offset::Local::now().year()
+                    }
+                },
+                u32::from_str(&caps[2]).or(Err(()))?,
+                u32::from_str(&caps[1]).or(Err(()))?,
+            ).ok_or(()),
+            None => Err(())
+        }
+    }
+}
+
+impl DateRange {
+    // Must be a range of valid dates.
+    pub fn weekday_set(&self) -> WeekdaySet {
+        let start_day = self.start.chrono_date.weekday().num_days_from_monday();
+        let num_day_diff = self.end.chrono_date.signed_duration_since(self.start.chrono_date).num_days() as u32;
 
         if num_day_diff >= 6 {
             WeekdaySet::all()
@@ -48,45 +108,6 @@ impl Date {
             let monday_to_end = bit_range::<u8>(0, (start_day + num_day_diff) % 7);
 
             WeekdaySet::from_bits(start_to_sunday | monday_to_end).unwrap()
-        }
-    }
-}
-
-impl ValidCheck for Date {
-    fn valid(&self) -> bool {
-        self.to_chrono_naive_date() != None
-    }
-}
-
-impl fmt::Display for Date {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &Date::MIN | &Date::MAX => write!(f, "-"),
-            _ => write!(f, "{:02}/{:02}/{}", self.day, self.month, self.year),
-        }
-    }
-}
-
-impl str::FromStr for Date {
-    type Err = ();
-
-    fn from_str(s: &str) -> result::Result<Self, Self::Err> {
-        let re = Regex::new(r"^(\d+)/(\d+)(?:/(\d+))?$").unwrap();
-        match re.captures(s) {
-            Some(caps) => Ok(Date {
-                year: {
-                    if let Some(year) = caps.get(3) {
-                        // We need to handle the error case, because although the regex validates that
-                        // the capture is an integer, it may not be representable as u8.
-                        u16::from_str(year.as_str()).or(Err(()))?
-                    } else {
-                        ::chrono::offset::Local::now().year() as u16
-                    }
-                },
-                month: u8::from_str(&caps[2]).or(Err(()))?,
-                day: u8::from_str(&caps[1]).or(Err(()))?,
-            }),
-            None => Err(())
         }
     }
 }

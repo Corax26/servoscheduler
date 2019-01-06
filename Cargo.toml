@@ -14,7 +14,7 @@ path = "src/client_main.rs"
 [dependencies]
 log = "0.4"
 env_logger = "0.5.3"
-chrono = "*"
+chrono = { version = "*", features = ["serde"] }
 bitflags = "*"
 num = "*"
 tarpc = "0.12.*"

@@ -20,7 +20,7 @@ impl TimePeriod {
             } else {
                 // There must be at least one day included in the intersection and both of the time
                 // periods.
-                let intersect_weekdays = Date::weekday_set(&intersection);
+                let intersect_weekdays = intersection.weekday_set();
 
                 !(intersect_weekdays & self.days & other.days).is_empty()
             }
