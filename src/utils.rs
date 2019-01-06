@@ -27,6 +27,10 @@ impl<T: PartialOrd + Copy> InclusiveRange<T> {
             return None
         }
     }
+
+    pub fn contains(&self, elem: &T) -> bool {
+        self.start <= *elem && *elem <= self.end
+    }
 }
 
 impl<T: ValidCheck + PartialOrd> ValidCheck for InclusiveRange<T> {

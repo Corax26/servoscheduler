@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::fmt;
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 use std::result;
 use std::str;
 
@@ -9,7 +10,7 @@ use regex::Regex;
 
 use utils::*;
 
-#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Debug)]
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Date {
     // Use chrono's representation, because it makes it much easier to manipulate the date and
     // provides fast access to metadata (like weekday).
@@ -32,6 +33,10 @@ impl Date {
         chrono::NaiveDate::from_ymd_opt(year, month, day).map(|cd| Date::from(cd))
     }
 
+    pub fn today() -> Date {
+        Date::from(chrono::offset::Local::today().naive_local())
+    }
+
     pub fn year(&self) -> i32 {
         self.chrono_date.year()
     }
@@ -44,6 +49,10 @@ impl Date {
         self.chrono_date.day()
     }
 
+    pub fn weekday(&self) -> WeekdaySet {
+        let idx = self.chrono_date.weekday().num_days_from_monday();
+        WeekdaySet::from_bits(1 << idx).unwrap()
+    }
 }
 
 impl From<chrono::NaiveDate> for Date {
@@ -55,6 +64,34 @@ impl From<chrono::NaiveDate> for Date {
 impl ValidCheck for Date {
     fn valid(&self) -> bool {
         *self != Date::empty_date()
+    }
+}
+
+impl Add<i64> for Date {
+    type Output = Date;
+
+    fn add(self, rhs: i64) -> Date {
+        Date::from(self.chrono_date + chrono::Duration::days(rhs))
+    }
+}
+
+impl AddAssign<i64> for Date {
+    fn add_assign(&mut self, rhs: i64) {
+        self.chrono_date += chrono::Duration::days(rhs);
+    }
+}
+
+impl Sub<i64> for Date {
+    type Output = Date;
+
+    fn sub(self, rhs: i64) -> Date {
+        Date::from(self.chrono_date - chrono::Duration::days(rhs))
+    }
+}
+
+impl SubAssign<i64> for Date {
+    fn sub_assign(&mut self, rhs: i64) {
+        self.chrono_date -= chrono::Duration::days(rhs);
     }
 }
 
@@ -80,7 +117,7 @@ impl str::FromStr for Date {
                         // the capture is an integer, it may not be representable as u8.
                         i32::from_str(year.as_str()).or(Err(()))?
                     } else {
-                        chrono::offset::Local::now().year()
+                        Date::today().year()
                     }
                 },
                 u32::from_str(&caps[2]).or(Err(()))?,
@@ -112,7 +149,7 @@ impl DateRange {
     }
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub struct Time {
     pub hour: u8,
     pub minute: u8,
@@ -120,8 +157,13 @@ pub struct Time {
 pub type TimeInterval = ExclusiveRange<Time>;
 
 impl Time {
-    const DAY_START_HOUR: u8 = 4;
+    // Used to define a special order so that days start at DAY_START_HOUR (instead of midnight).
+    pub const DAY_START_HOUR: u8 = 4;
     pub const EMPTY: Time = Time { hour: 25, minute: 0 };
+
+    fn shifted_hour(&self) -> u8 {
+        (self.hour + 24 - Self::DAY_START_HOUR) % 24
+    }
 }
 
 impl ValidCheck for Time {
@@ -131,12 +173,18 @@ impl ValidCheck for Time {
 }
 
 impl PartialOrd for Time {
-    // Special order so that days start at DAY_START_HOUR (instead of midnight).
     fn partial_cmp(&self, other: &Time) -> Option<Ordering> {
-        let shift = |h| (h + 24 - Self::DAY_START_HOUR) % 24;
-
-        match shift(self.hour).partial_cmp(&shift(other.hour)) {
+        match self.shifted_hour().partial_cmp(&other.shifted_hour()) {
             Some(Ordering::Equal) => self.minute.partial_cmp(&other.minute),
+            r => r
+        }
+    }
+}
+
+impl Ord for Time {
+    fn cmp(&self, other: &Time) -> Ordering {
+        match self.shifted_hour().cmp(&other.shifted_hour()) {
+            Ordering::Equal => self.minute.cmp(&other.minute),
             r => r
         }
     }

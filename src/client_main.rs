@@ -20,6 +20,7 @@ extern crate regex;
 
 mod actuator;
 mod rpc;
+mod schedule;
 mod time;
 mod time_slot;
 mod utils;
@@ -33,6 +34,7 @@ use tarpc::sync;
 use tarpc::sync::client::ClientExt;
 
 use actuator::*;
+use schedule::Schedule;
 use time_slot::*;
 use time::*;
 use rpc::{SyncClient};
@@ -165,7 +167,7 @@ fn list_actuators() -> RpcResult {
 }
 
 fn list_time_slots(args: &clap::ArgMatches) -> RpcResult {
-    use prettytable::{Table,format};
+    use prettytable::{Table, format};
 
     fn time_interval_str(time_period: &TimePeriod) -> String {
         format!("{} - {}", time_period.time_interval.start, time_period.time_interval.end)
@@ -371,6 +373,56 @@ fn default_state(args: &clap::ArgMatches) -> RpcResult {
     }
 }
 
+fn schedule(args: &clap::ArgMatches) -> RpcResult {
+    use prettytable::{Table, Row, format};
+
+    let actuator_id = value_t_or_exit!(args, "actuator", u32);
+
+    let timeslots = get_client().list_timeslots(actuator_id)?;
+    let default_state = get_client().get_default_state(actuator_id)?;
+
+    // TODO: make it configurable
+    let schedule = Schedule::compute(&timeslots, &Date::today(), 7);
+
+    let mut schedule_table = Table::new();
+    schedule_table.set_titles(Row::new(schedule.days.keys().map(|d| cell!(b->d)).collect()));
+    let mut days_row = Row::empty();
+
+    for slots in schedule.days.values() {
+        let mut day_table = Table::new();
+        day_table.set_format(*format::consts::FORMAT_CLEAN);
+
+        let mut previous_end_time = Time { hour: Time::DAY_START_HOUR, minute: 0 };
+
+        for slot in slots.iter() {
+            let id_string = if let Some(oid) = slot.override_id {
+                format!("{} > {}", slot.timeslot_id, oid)
+            } else {
+                format!("{}", slot.timeslot_id)
+            };
+
+            if slot.time_interval.start != previous_end_time {
+                day_table.add_row(row!["", default_state]);
+                day_table.add_row(row![slot.time_interval.start, ""]);
+            }
+
+            day_table.add_row(row!["", format!("{} (timeslot {})", slot.actuator_state, id_string)]);
+            day_table.add_row(row![slot.time_interval.end, ""]);
+
+            previous_end_time = slot.time_interval.end;
+        }
+
+        day_table.add_row(row!["", default_state]);
+
+        days_row.add_cell(cell!(day_table));
+    }
+
+    schedule_table.add_row(days_row);
+    schedule_table.printstd();
+
+    Ok(())
+}
+
 fn main() {
     use clap::{Arg, ArgGroup, App, AppSettings, SubCommand};
 
@@ -495,6 +547,10 @@ fn main() {
                     .required(true)
                 )
             )
+        ).subcommand(SubCommand::with_name("schedule")
+            .arg(actuator_arg.clone()
+                .required(true)
+            )
         ).subcommand(SubCommand::with_name("test")
         ).get_matches();
 
@@ -502,6 +558,7 @@ fn main() {
         ("list-actuators", Some(_)) => list_actuators(),
         ("timeslot", Some(sub)) => time_slot(sub),
         ("default-state", Some(sub)) => default_state(sub),
+        ("schedule", Some(sub)) => schedule(sub),
         ("test", Some(_)) => test(),
         _ => unreachable!(),
     };
