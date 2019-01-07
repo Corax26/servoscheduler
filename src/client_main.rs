@@ -215,10 +215,12 @@ fn add_time_slot(args: &clap::ArgMatches) -> RpcResult {
     let actuator_id = value_t_or_exit!(args, "actuator", u32);
     let time_interval = value_t_or_exit!(args, "time-interval", TimeInterval);
     let actuator_state = value_t_or_exit!(args, "state", ActuatorState);
-    // TODO: macro value_t_default_or_exit
+    // TODO: macro value_t_default_or_exit, or just set value using .default_value()
     let start_date = if args.is_present("start-date") {
         value_t_or_exit!(args, "start-date", Date)
     } else {
+        // TODO: maybe actually use today, to make it more consistent with the doc? It might also
+        // make it possible to get rid of Date::MIN.
         Date::MIN
     };
     let end_date = if args.is_present("end-date") {
@@ -377,12 +379,17 @@ fn schedule(args: &clap::ArgMatches) -> RpcResult {
     use prettytable::{Table, Row, format};
 
     let actuator_id = value_t_or_exit!(args, "actuator", u32);
+    let start_date = if args.is_present("start-date") {
+        value_t_or_exit!(args, "start-date", Date)
+    } else {
+        Date::today()
+    };
+    let nb_days = value_t_or_exit!(args, "day-number", u32);
 
     let timeslots = get_client().list_timeslots(actuator_id)?;
     let default_state = get_client().get_default_state(actuator_id)?;
 
-    // TODO: make it configurable
-    let schedule = Schedule::compute(&timeslots, &Date::today(), 7);
+    let schedule = Schedule::compute(&timeslots, &start_date, nb_days);
 
     let mut schedule_table = Table::new();
     schedule_table.set_titles(Row::new(schedule.days.keys().map(|d| cell!(b->d)).collect()));
@@ -406,7 +413,7 @@ fn schedule(args: &clap::ArgMatches) -> RpcResult {
                 day_table.add_row(row![slot.time_interval.start, ""]);
             }
 
-            day_table.add_row(row!["", format!("{} (timeslot {})", slot.actuator_state, id_string)]);
+            day_table.add_row(row!["  |  ", format!("{} (TS {})", slot.actuator_state, id_string)]);
             day_table.add_row(row![slot.time_interval.end, ""]);
 
             previous_end_time = slot.time_interval.end;
@@ -441,7 +448,7 @@ fn main() {
         .help("Time interval, specified as hh:mm-hh:mm");
     let start_date_arg = Arg::with_name("start-date")
         .takes_value(true)
-        .help("Start date, specified as DD/MM[/YYYY] (default: now)");
+        .help("Start date, specified as DD/MM[/YYYY] (default: today)");
     let end_date_arg = Arg::with_name("end-date")
         .takes_value(true)
         .help("End date, specified as DD/MM[/YYYY] (default: none)");
@@ -550,6 +557,13 @@ fn main() {
         ).subcommand(SubCommand::with_name("schedule")
             .arg(actuator_arg.clone()
                 .required(true)
+            ).arg(start_date_arg.clone()
+                .long("--start-date").short("-s")
+            ).arg(Arg::with_name("day-number")
+                .takes_value(true)
+                .default_value("7")
+                .help("Number of days to show")
+                .long("--day-number").short("-n")
             )
         ).subcommand(SubCommand::with_name("test")
         ).get_matches();
