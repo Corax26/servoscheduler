@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::sync::{Arc,RwLock};
+use std::sync::Arc;
 
 use actuator::{ActuatorInfo, ActuatorState};
 use rpc::SyncService;
@@ -7,13 +7,13 @@ use time_slot::*;
 use server::*;
 
 pub struct RpcServer {
-    pub server: Arc<RwLock<Server>>,
+    pub server: Arc<Server>,
 }
 
 impl RpcServer {
-    pub fn new() -> RpcServer {
+    pub fn new(server: Server) -> RpcServer {
         RpcServer {
-            server: Arc::new(RwLock::new(Server::new())),
+            server: Arc::new(server),
         }
     }
 }
@@ -31,47 +31,47 @@ impl Clone for RpcServer {
 
 impl SyncService for RpcServer {
     fn list_actuators(&self) -> Result<BTreeMap<u32, ActuatorInfo>> {
-        Ok(self.server.read().unwrap().list_actuators())
+        Ok(self.server.list_actuators())
     }
 
     fn list_timeslots(&self, actuator_id: u32) -> Result<BTreeMap<u32, TimeSlot>> {
-        self.server.read().unwrap().list_timeslots(actuator_id).map(|t| t.clone())
+        self.server.list_timeslots(actuator_id)
     }
 
     fn get_default_state(&self, actuator_id: u32) -> Result<ActuatorState> {
-        self.server.read().unwrap().get_default_state(actuator_id).map(|d| d.clone())
+        self.server.get_default_state(actuator_id)
     }
 
     fn set_default_state(&self, actuator_id: u32, default_state: ActuatorState) -> Result<()> {
-        self.server.write().unwrap().set_default_state(actuator_id, default_state)
+        self.server.set_default_state(actuator_id, default_state)
     }
 
     fn add_time_slot(&self, actuator_id: u32, time_period: TimePeriod, actuator_state: ActuatorState, enabled: bool) -> Result<u32> {
-        self.server.write().unwrap().add_time_slot(actuator_id, time_period, actuator_state, enabled)
+        self.server.add_time_slot(actuator_id, time_period, actuator_state, enabled)
     }
 
     fn remove_time_slot(&self, actuator_id: u32, time_slot_id: u32) -> Result<()> {
-        self.server.write().unwrap().remove_time_slot(actuator_id, time_slot_id)
+        self.server.remove_time_slot(actuator_id, time_slot_id)
     }
 
     fn time_slot_set_time_period(&self, actuator_id: u32, time_slot_id: u32, time_period: TimePeriod) -> Result<()> {
-        self.server.write().unwrap().time_slot_set_time_period(actuator_id, time_slot_id, time_period)
+        self.server.time_slot_set_time_period(actuator_id, time_slot_id, time_period)
     }
 
     fn time_slot_set_enabled(&self, actuator_id: u32, time_slot_id: u32, enabled: bool) -> Result<()> {
-        self.server.write().unwrap().time_slot_set_enabled(actuator_id, time_slot_id, enabled)
+        self.server.time_slot_set_enabled(actuator_id, time_slot_id, enabled)
     }
 
     fn time_slot_set_actuator_state(&self, actuator_id: u32, time_slot_id: u32, actuator_state: ActuatorState) -> Result<()> {
-        self.server.write().unwrap().time_slot_set_actuator_state(actuator_id, time_slot_id, actuator_state)
+        self.server.time_slot_set_actuator_state(actuator_id, time_slot_id, actuator_state)
     }
 
     fn time_slot_add_time_override(&self, actuator_id: u32, time_slot_id: u32, time_period: TimePeriod) -> Result<u32> {
-        self.server.write().unwrap().time_slot_add_time_override(actuator_id, time_slot_id, time_period)
+        self.server.time_slot_add_time_override(actuator_id, time_slot_id, time_period)
     }
 
     fn time_slot_remove_time_override(&self, actuator_id: u32, time_slot_id: u32, time_override_id: u32) -> Result<()> {
-        self.server.write().unwrap().time_slot_remove_time_override(actuator_id, time_slot_id, time_override_id)
+        self.server.time_slot_remove_time_override(actuator_id, time_slot_id, time_override_id)
     }
 }
 

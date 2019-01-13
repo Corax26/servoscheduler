@@ -35,28 +35,28 @@ use tarpc::sync;
 use actuator::*;
 use rpc::SyncServiceExt;
 use rpc_server::RpcServer;
+use server::Server;
 
 fn main() {
-    let rpc_server = RpcServer::new();
+    let mut server = Server::new();
 
-    {
-        let mut server = rpc_server.server.write().unwrap();
-        server.add_actuator(Actuator::new(
-            ActuatorInfo {
-                name: "switch".to_string(),
-                actuator_type: ActuatorType::Toggle
-            },
-            ActuatorState::Toggle(false)
-        )).unwrap();
-        server.add_actuator(Actuator::new(
-            ActuatorInfo {
-                name: "knob".to_string(),
-                actuator_type: ActuatorType::FloatValue { min: 0.0, max: 1.0 }
-            },
-            ActuatorState::FloatValue(0.5)
-        )).unwrap();
-        println!("Server added actuators");
-    }
+    server.add_actuator(Actuator::new(
+        ActuatorInfo {
+            name: "switch".to_string(),
+            actuator_type: ActuatorType::Toggle
+        },
+        ActuatorState::Toggle(false)
+    )).unwrap();
+    server.add_actuator(Actuator::new(
+        ActuatorInfo {
+            name: "knob".to_string(),
+            actuator_type: ActuatorType::FloatValue { min: 0.0, max: 1.0 }
+        },
+        ActuatorState::FloatValue(0.5)
+    )).unwrap();
+    println!("Server added actuators");
+
+    let rpc_server = RpcServer::new(server);
 
     let handle = rpc_server.listen("localhost:4242", sync::server::Options::default())
         .unwrap();

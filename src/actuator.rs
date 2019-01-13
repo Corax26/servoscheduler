@@ -3,6 +3,7 @@ use std::fmt;
 use std::num;
 use std::result;
 use std::str;
+use std::sync::{Arc, RwLock};
 
 use time::*;
 use time_slot::*;
@@ -69,7 +70,7 @@ impl ValidCheck for ActuatorInfo {
     }
 }
 
-pub struct Actuator{
+pub struct Actuator {
     pub info: ActuatorInfo,
 
     timeslots: BTreeMap<u32, TimeSlot>,
@@ -78,38 +79,20 @@ pub struct Actuator{
     next_timeslot_id: u32,
     // TODO: would be nice to be per-timeslot, but shouldn't be exposed via RPC either...
     next_override_id: u32,
-
-    // Next steps:
-    // [✓] 1. Remove Schedule indirection: put timeslots and default_state in Actuator, change RPC
-    // accordingly
-    // [Drop the cache. Difficult to make sure it's always consistent and has no extraneous entry.]
-    // 2. Create new Schedule struct, representing an actual schedule (X days of time periods in
-    //    chronological order)
-    // 3. Implement method to create a schedule from a timeslot list and a date range.
-    // 4. Add RPC for getting the schedule for the next X days (with some limit), and possibly
-    //    between two dates (less urgent).
-    // //////
-    // 2. Create new Schedule struct, representing an actual schedule (X days of time periods in
-    //    chronological order, starting from now - no time period in the past)
-    // 3. Implement management methods:
-    //    - initialise from timeslot list
-    //    - update on timeslot modifications
-    //    - ?
-    // 4. Add schedule_cache field to Actuator (14 days by default?), call schedule_cache's
-    //    management methods from corresponding methods
-    // 5. Add RPC for getting the schedule for the next X days (with some limit), and possibly
-    //    between two dates (less urgent)
 }
+pub type ActuatorHandle = Arc<RwLock<Actuator>>;
 
 impl Actuator {
-    pub fn new(info: ActuatorInfo, default_state: ActuatorState) -> Actuator {
-        Actuator {
+    pub fn new(info: ActuatorInfo, default_state: ActuatorState) -> ActuatorHandle {
+        let result_handle = Arc::new(RwLock::new(Actuator {
             info,
             timeslots: BTreeMap::new(),
             default_state,
             next_timeslot_id: 0,
             next_override_id: 0,
-        }
+        }));
+
+        result_handle
     }
 
     pub fn timeslots(&self) -> &BTreeMap<u32, TimeSlot> {
