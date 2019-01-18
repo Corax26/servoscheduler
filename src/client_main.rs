@@ -34,7 +34,6 @@ use tarpc::sync;
 use tarpc::sync::client::ClientExt;
 
 use actuator::*;
-use schedule::Schedule;
 use time_slot::*;
 use time::*;
 use rpc::{SyncClient};
@@ -389,13 +388,13 @@ fn schedule(args: &clap::ArgMatches) -> RpcResult {
     let timeslots = get_client().list_timeslots(actuator_id)?;
     let default_state = get_client().get_default_state(actuator_id)?;
 
-    let schedule = Schedule::compute(&timeslots, &start_date, nb_days);
+    let schedule = schedule::compute_schedule(&timeslots, start_date, nb_days);
 
     let mut schedule_table = Table::new();
-    schedule_table.set_titles(Row::new(schedule.days.keys().map(|d| cell!(b->d)).collect()));
+    schedule_table.set_titles(Row::new(schedule.keys().map(|d| cell!(b->d)).collect()));
     let mut days_row = Row::empty();
 
-    for slots in schedule.days.values() {
+    for slots in schedule.values() {
         let mut day_table = Table::new();
         day_table.set_format(*format::consts::FORMAT_CLEAN);
 

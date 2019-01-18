@@ -12,8 +12,8 @@ pub struct TimePeriod {
 }
 
 impl TimePeriod {
-    pub fn occurs_on(&self, date: &Date) -> bool {
-        self.date_range.contains(date) && !(date.weekday() & self.days).is_empty()
+    pub fn occurs_on(&self, date: Date) -> bool {
+        self.date_range.contains(&date) && !(date.weekday() & self.days).is_empty()
     }
 
     pub fn overlaps_dates(&self, other: &TimePeriod) -> bool {
@@ -62,10 +62,10 @@ impl TimeSlot {
         }
     }
 
-    pub fn time_interval_on(&self, date: &Date) -> Option<(TimeInterval, Option<u32>)> {
-        if self.time_period.occurs_on(&date) {
+    pub fn time_interval_on(&self, date: Date) -> Option<(TimeInterval, Option<u32>)> {
+        if self.time_period.occurs_on(date) {
             for (oid, or) in self.time_override.iter() {
-                if or.occurs_on(&date) {
+                if or.occurs_on(date) {
                     return Some((or.time_interval.clone(), Some(*oid)));
                 }
             }
