@@ -5,7 +5,7 @@ use std::result;
 use std::str;
 
 use chrono;
-use chrono::Datelike;
+use chrono::{Datelike, Timelike};
 use regex::Regex;
 
 use utils::*;
@@ -33,10 +33,6 @@ impl Date {
         chrono::NaiveDate::from_ymd_opt(year, month, day).map(|cd| Date::from(cd))
     }
 
-    pub fn today() -> Date {
-        Date::from(chrono::offset::Local::today().naive_local())
-    }
-
     pub fn year(&self) -> i32 {
         self.chrono_date.year()
     }
@@ -52,6 +48,12 @@ impl Date {
     pub fn weekday(&self) -> WeekdaySet {
         let idx = self.chrono_date.weekday().num_days_from_monday();
         WeekdaySet::from_bits(1 << idx).unwrap()
+    }
+
+    // Private to avoid misuses: this is the "real" today, not taking into account the hour shift
+    // of Time.
+    fn today_raw() -> Date {
+        Date::from(chrono::offset::Local::today().naive_local())
     }
 }
 
@@ -117,7 +119,8 @@ impl str::FromStr for Date {
                         // the capture is an integer, it may not be representable as u8.
                         i32::from_str(year.as_str()).or(Err(()))?
                     } else {
-                        Date::today().year()
+                        // Using the real date arguably makes more sense here.
+                        Date::today_raw().year()
                     }
                 },
                 u32::from_str(&caps[2]).or(Err(()))?,
@@ -161,8 +164,21 @@ impl Time {
     pub const DAY_START_HOUR: u8 = 4;
     pub const EMPTY: Time = Time { hour: 25, minute: 0 };
 
+    pub fn now() -> Time {
+        Time::from(chrono::offset::Local::now().time())
+    }
+
     fn shifted_hour(&self) -> u8 {
         (self.hour + 24 - Self::DAY_START_HOUR) % 24
+    }
+}
+
+impl From<chrono::NaiveTime> for Time {
+    fn from(chrono_time: chrono::NaiveTime) -> Self {
+        Time {
+            hour: chrono_time.hour() as u8,
+            minute: chrono_time.minute() as u8,
+        }
     }
 }
 
@@ -213,6 +229,30 @@ impl str::FromStr for TimeInterval {
                 }
             }),
             None => Err(())
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DateTime {
+    pub date: Date,
+    pub time: Time,
+}
+
+impl DateTime {
+    pub fn now() -> DateTime {
+        let chrono_now = chrono::offset::Local::now();
+        let time = Time::from(chrono_now.time());
+
+        // If the time is between midnight and DAY_START_HOUR, the corresponding date is one day
+        // before the real date.
+        let day_offset = if time.hour < Time::DAY_START_HOUR { -1 } else { 0 };
+        let date = Date::from(chrono_now.date().naive_local()
+                              + chrono::Duration::days(day_offset));
+
+        DateTime {
+            date,
+            time,
         }
     }
 }

@@ -381,7 +381,7 @@ fn schedule(args: &clap::ArgMatches) -> RpcResult {
     let start_date = if args.is_present("start-date") {
         value_t_or_exit!(args, "start-date", Date)
     } else {
-        Date::today()
+        DateTime::now().date
     };
     let nb_days = value_t_or_exit!(args, "day-number", u32);
 
