@@ -303,7 +303,7 @@ impl str::FromStr for WeekdaySet {
             if c == Self::TEXT_REPR[i] {
                 day_bits |= 1 << i;
             } else if c != '-' {
-                return Err(());
+                return Err(())
             }
         }
 

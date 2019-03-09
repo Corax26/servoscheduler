@@ -66,7 +66,7 @@ impl TimeSlot {
         if self.time_period.occurs_on(date) {
             for (oid, or) in self.time_override.iter() {
                 if or.occurs_on(date) {
-                    return Some((or.time_interval.clone(), Some(*oid)));
+                    return Some((or.time_interval.clone(), Some(*oid)))
                 }
             }
 

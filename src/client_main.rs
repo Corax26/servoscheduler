@@ -43,7 +43,7 @@ type RpcResult = result::Result<(), tarpc::Error<rpc::Error>>;
 fn parse_colon_specifier(s: &str, expected_num: usize) -> Option<Vec<u32>> {
     let ids: Vec<&str> = s.split(':').collect();
     if ids.len() != expected_num {
-        return None;
+        return None
     }
 
     let vals: Vec<u32> = ids.iter().filter_map(|s| u32::from_str(s).ok()).collect();
