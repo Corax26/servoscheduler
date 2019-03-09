@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::ops::DerefMut;
 use std::result;
 
 use actuator::*;
@@ -139,8 +138,6 @@ impl Server {
     {
         let actuator_handle =
             self.actuators.get(&actuator_id).ok_or(InvalidArgument(IAE::ActuatorId))?;
-        // Explicit call to .deref_mut() needed because of
-        // https://github.com/rust-lang/rust/issues/26186
-        func(actuator_handle.write().unwrap().deref_mut())
+        func(&mut *actuator_handle.write().unwrap())
     }
 }
