@@ -7,7 +7,7 @@ use time_slot::*;
 pub struct ScheduleSlot {
     pub time_interval: TimeInterval,
     pub actuator_state: ActuatorState,
-    pub timeslot_id: u32,
+    pub id: u32,
     pub override_id: Option<u32>,
 }
 
@@ -30,7 +30,7 @@ pub fn compute_schedule(timeslots: &BTreeMap<u32, TimeSlot>,
                 slots.push(ScheduleSlot {
                     time_interval,
                     actuator_state: ts.actuator_state.clone(),
-                    timeslot_id: *id,
+                    id: *id,
                     override_id,
                 });
             }
@@ -44,4 +44,33 @@ pub fn compute_schedule(timeslots: &BTreeMap<u32, TimeSlot>,
     }
 
     schedule
+}
+
+// Find the next active timeslot in timeslots scheduled on dt.date, starting on dt.time or later.
+pub fn find_next_timeslot(timeslots: &BTreeMap<u32, TimeSlot>, dt: &DateTime)
+    -> Option<ScheduleSlot>
+{
+    let mut next_ts: Option<ScheduleSlot> = None;
+    for (id, ts) in timeslots.iter() {
+        if let Some((time_interval, override_id)) = ts.time_interval_on(dt.date) {
+            if !ts.enabled || time_interval.start < dt.time {
+                continue;
+            }
+
+            if let Some(ref slot) = next_ts {
+                if time_interval.start > slot.time_interval.start {
+                    continue;
+                }
+            }
+
+            next_ts = Some(ScheduleSlot {
+                time_interval,
+                actuator_state: ts.actuator_state.clone(),
+                id: *id,
+                override_id,
+            });
+        }
+    }
+
+    next_ts
 }

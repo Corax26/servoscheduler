@@ -402,9 +402,9 @@ fn schedule(args: &clap::ArgMatches) -> RpcResult {
 
         for slot in slots.iter() {
             let id_string = if let Some(oid) = slot.override_id {
-                format!("{} > {}", slot.timeslot_id, oid)
+                format!("{} > {}", slot.id, oid)
             } else {
-                format!("{}", slot.timeslot_id)
+                format!("{}", slot.id)
             };
 
             if slot.time_interval.start != previous_end_time {

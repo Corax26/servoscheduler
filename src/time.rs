@@ -162,14 +162,25 @@ pub type TimeInterval = ExclusiveRange<Time>;
 impl Time {
     // Used to define a special order so that days start at DAY_START_HOUR (instead of midnight).
     pub const DAY_START_HOUR: u8 = 4;
+    pub const MIN: Time = Time { hour: Self::DAY_START_HOUR, minute: 0 };
+    pub const MAX: Time = Time { hour: (Self::DAY_START_HOUR - 1) % 24, minute: 59 };
     pub const EMPTY: Time = Time { hour: 25, minute: 0 };
 
     pub fn now() -> Time {
         Time::from(chrono::offset::Local::now().time())
     }
 
+    pub fn sub_minute(&self, rhs: Time) -> i32 {
+        // TODO: do something about DST...
+        self.minute_since_start() - rhs.minute_since_start()
+    }
+
     fn shifted_hour(&self) -> u8 {
         (self.hour + 24 - Self::DAY_START_HOUR) % 24
+    }
+
+    fn minute_since_start(&self) -> i32 {
+        (self.shifted_hour() as i32) * 60 + (self.minute as i32)
     }
 }
 

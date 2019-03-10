@@ -49,6 +49,10 @@ impl<T: PartialOrd + Copy> ExclusiveRange<T> {
     pub fn overlaps(&self, other: &ExclusiveRange<T>) -> bool {
         self.start < other.end && other.start < self.end
     }
+
+    pub fn contains(&self, elem: &T) -> bool {
+        self.start <= *elem && *elem < self.end
+    }
 }
 
 impl<T: ValidCheck + PartialOrd> ValidCheck for ExclusiveRange<T> {
