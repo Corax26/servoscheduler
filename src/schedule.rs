@@ -22,6 +22,10 @@ pub fn compute_schedule(timeslots: &BTreeMap<u32, TimeSlot>,
         let mut slots = Vec::<ScheduleSlot>::new();
 
         for (id, ts) in timeslots.iter() {
+            if !ts.enabled {
+                continue;
+            }
+
             if let Some((time_interval, override_id)) = ts.time_interval_on(day) {
                 slots.push(ScheduleSlot {
                     time_interval,
