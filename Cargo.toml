@@ -4,11 +4,11 @@ version = "0.1.0"
 authors = ["Kevin Brodsky <corax26@gmail.com>"]
 
 [[bin]]
-name = "server"
+name = "svsc_server"
 path = "src/server_main.rs"
 
 [[bin]]
-name = "client"
+name = "svsc_client"
 path = "src/client_main.rs"
 
 [dependencies]
