@@ -7,6 +7,7 @@ use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time;
 use std::thread;
 
+use actuator_controller::*;
 use schedule;
 use time::*;
 use time_slot::*;
@@ -83,19 +84,24 @@ pub struct Actuator {
     // TODO: would be nice to be per-timeslot, but shouldn't be exposed via RPC either...
     next_override_id: u32,
 
+    actuator_controller: ActuatorControllerHandle,
+
     thread_comm: Arc<Mutex<ThreadComm>>,
     thread_comm_cv: Arc<Condvar>,
 }
 pub type ActuatorHandle = Arc<RwLock<Actuator>>;
 
 impl Actuator {
-    pub fn new(info: ActuatorInfo, default_state: ActuatorState) -> ActuatorHandle {
+    pub fn new(info: ActuatorInfo,
+               default_state: ActuatorState,
+               actuator_controller: ActuatorControllerHandle) -> ActuatorHandle {
         let result_handle = Arc::new(RwLock::new(Actuator {
             info,
             timeslots: BTreeMap::new(),
             default_state: default_state.clone(),
             next_timeslot_id: 0,
             next_override_id: 0,
+            actuator_controller,
             thread_comm: Arc::new(Mutex::new(ThreadComm {
                 active_timeslot: ActiveTimeSlot::default_state(default_state),
                 modified: false,
@@ -359,6 +365,16 @@ impl Actuator {
         Ok(())
     }
 
+    pub fn set_state(&self, state: ActuatorState) -> Result<()> {
+        if !self.valid_state(&state) {
+            return Err(InvalidArgument(IAE::ActuatorState))
+        }
+
+        self.actuator_controller.lock().unwrap().set_state(&state);
+
+        Ok(())
+    }
+
     fn valid_state(&self, state: &ActuatorState) -> bool {
         match self.info.actuator_type {
             ActuatorType::Toggle => match state {
@@ -589,9 +605,9 @@ struct ThreadComm {
 }
 
 fn actuator_thread(actuator: ActuatorHandle) {
-    let (thread_comm_lock, thread_comm_cv) = {
+    let (thread_comm_lock, thread_comm_cv, actuator_controller) = {
         let guard = actuator.read().unwrap();
-        (guard.thread_comm.clone(), guard.thread_comm_cv.clone())
+        (guard.thread_comm.clone(), guard.thread_comm_cv.clone(), guard.actuator_controller.clone())
     };
 
     let mut now = DateTime::now();
@@ -655,7 +671,7 @@ fn actuator_thread(actuator: ActuatorHandle) {
                 active_timeslot.end_time
             );
 
-            // TODO: actual handling the new actuator state.
+            actuator_controller.lock().unwrap().set_state(&active_timeslot.actuator_state);
         } else {
             // We have reached end_time. Find the new active timeslot.
 

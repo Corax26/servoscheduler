@@ -19,6 +19,7 @@ extern crate prettytable;
 extern crate regex;
 
 mod actuator;
+mod actuator_controller;
 mod rpc;
 mod schedule;
 mod time;
@@ -429,6 +430,13 @@ fn schedule(args: &clap::ArgMatches) -> RpcResult {
     Ok(())
 }
 
+fn set_state(args: &clap::ArgMatches) -> RpcResult {
+    let actuator_id = value_t_or_exit!(args, "actuator", u32);
+    let actuator_state = value_t_or_exit!(args, "state", ActuatorState);
+
+    get_client().set_state(actuator_id, actuator_state).and(Ok(()))
+}
+
 fn main() {
     use clap::{Arg, ArgGroup, App, AppSettings, SubCommand};
 
@@ -459,19 +467,6 @@ fn main() {
         .about("CLI for ServoScheduler")
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .subcommand(SubCommand::with_name("list-actuators")
-        ).subcommand(SubCommand::with_name("default-state")
-            .setting(AppSettings::SubcommandRequiredElseHelp)
-            .subcommand(SubCommand::with_name("get")
-                .arg(actuator_arg.clone()
-                    .required(true)
-                )
-            ).subcommand(SubCommand::with_name("set")
-                .arg(actuator_arg.clone()
-                    .required(true)
-                ).arg(actuator_state_arg.clone()
-                    .required(true)
-                )
-            )
         ).subcommand(SubCommand::with_name("timeslot")
             .setting(AppSettings::SubcommandRequiredElseHelp)
             .subcommand(SubCommand::with_name("list")
@@ -553,6 +548,19 @@ fn main() {
                     .required(true)
                 )
             )
+        ).subcommand(SubCommand::with_name("default-state")
+            .setting(AppSettings::SubcommandRequiredElseHelp)
+            .subcommand(SubCommand::with_name("get")
+                .arg(actuator_arg.clone()
+                    .required(true)
+                )
+            ).subcommand(SubCommand::with_name("set")
+                .arg(actuator_arg.clone()
+                    .required(true)
+                ).arg(actuator_state_arg.clone()
+                    .required(true)
+                )
+            )
         ).subcommand(SubCommand::with_name("schedule")
             .arg(actuator_arg.clone()
                 .required(true)
@@ -564,6 +572,11 @@ fn main() {
                 .help("Number of days to show")
                 .long("--day-number").short("-n")
             )
+        ).subcommand(SubCommand::with_name("set-state")
+            .arg(actuator_arg.clone()
+                .required(true)
+            )
+            .arg(&actuator_state_arg)
         ).subcommand(SubCommand::with_name("test")
         ).get_matches();
 
@@ -572,6 +585,7 @@ fn main() {
         ("timeslot", Some(sub)) => time_slot(sub),
         ("default-state", Some(sub)) => default_state(sub),
         ("schedule", Some(sub)) => schedule(sub),
+        ("set-state", Some(sub)) => set_state(sub),
         ("test", Some(_)) => test(),
         _ => unreachable!(),
     };

@@ -74,4 +74,6 @@ service! {
     rpc time_slot_set_actuator_state(actuator_id: u32, time_slot_id: u32, actuator_state: ActuatorState) -> () | Error;
     rpc time_slot_add_time_override(actuator_id: u32, time_slot_id: u32, time_period: TimePeriod) -> u32 | Error;
     rpc time_slot_remove_time_override(actuator_id: u32, time_slot_id: u32, time_override_id: u32) -> () | Error;
+
+    rpc set_state(actuator_id: u32, state: ActuatorState) -> () | Error;
 }

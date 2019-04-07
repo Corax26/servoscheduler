@@ -101,6 +101,10 @@ impl Server {
             |a| a.time_slot_remove_time_override(time_slot_id, time_override_id))
     }
 
+    pub fn set_state(&self, actuator_id: u32, state: ActuatorState) -> Result<()> {
+        self.read_actuator(actuator_id, |a| a.set_state(state))
+    }
+
     // Internal API (not exposed via RPC)
 
     pub fn add_actuator(&mut self, actuator: ActuatorHandle) -> Result<u32> {

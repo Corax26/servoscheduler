@@ -23,6 +23,7 @@ extern crate regex;
 // extern crate env_logger;
 
 mod actuator;
+mod actuator_controller;
 mod rpc;
 mod rpc_server;
 mod schedule;
@@ -31,9 +32,12 @@ mod time;
 mod time_slot;
 mod utils;
 
+use std::path::Path;
+
 use tarpc::sync;
 
 use actuator::*;
+use actuator_controller::*;
 use rpc::SyncServiceExt;
 use rpc_server::RpcServer;
 use server::Server;
@@ -41,21 +45,38 @@ use server::Server;
 fn main() {
     let mut server = Server::new();
 
-    server.add_actuator(Actuator::new(
-        ActuatorInfo {
-            name: "switch".to_string(),
-            actuator_type: ActuatorType::Toggle
+    let args: Vec<String> = std::env::args().collect();
+    match args.len() {
+        1 => {
+            server.add_actuator(Actuator::new(
+                ActuatorInfo {
+                    name: "switch".to_string(),
+                    actuator_type: ActuatorType::Toggle
+                },
+                ActuatorState::Toggle(false),
+                FileActuatorController::new(Path::new("fake_ctl_files/switch")).unwrap(),
+            )).unwrap();
+            server.add_actuator(Actuator::new(
+                ActuatorInfo {
+                    name: "knob".to_string(),
+                    actuator_type: ActuatorType::FloatValue { min: 0.0, max: 1.0 }
+                },
+                ActuatorState::FloatValue(0.5),
+                FileActuatorController::new(Path::new("fake_ctl_files/knob")).unwrap(),
+            )).unwrap();
         },
-        ActuatorState::Toggle(false)
-    )).unwrap();
-    server.add_actuator(Actuator::new(
-        ActuatorInfo {
-            name: "knob".to_string(),
-            actuator_type: ActuatorType::FloatValue { min: 0.0, max: 1.0 }
+        2 => {
+            server.add_actuator(Actuator::new(
+                ActuatorInfo {
+                    name: "switch".to_string(),
+                    actuator_type: ActuatorType::Toggle
+                },
+                ActuatorState::Toggle(false),
+                FileActuatorController::new(Path::new(&args[1])).unwrap(),
+            )).unwrap();
         },
-        ActuatorState::FloatValue(0.5)
-    )).unwrap();
-    println!("Server added actuators");
+        _ => std::process::exit(1),
+    }
 
     let rpc_server = RpcServer::new(server);
 

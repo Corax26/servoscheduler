@@ -73,6 +73,10 @@ impl SyncService for RpcServer {
     fn time_slot_remove_time_override(&self, actuator_id: u32, time_slot_id: u32, time_override_id: u32) -> Result<()> {
         self.server.time_slot_remove_time_override(actuator_id, time_slot_id, time_override_id)
     }
+
+    fn set_state(&self, actuator_id: u32, state: ActuatorState) -> Result<()> {
+        self.server.set_state(actuator_id, state)
+    }
 }
 
 /* impl FutureService for RpcServer {
