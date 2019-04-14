@@ -50,6 +50,10 @@ impl Date {
         WeekdaySet::from_bits(1 << idx).unwrap()
     }
 
+    pub fn chrono_date(&self) -> chrono::NaiveDate {
+        self.chrono_date
+    }
+
     // Private to avoid misuses: this is the "real" today, not taking into account the hour shift
     // of Time.
     fn today_raw() -> Date {

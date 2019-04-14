@@ -392,7 +392,11 @@ fn schedule(args: &clap::ArgMatches) -> RpcResult {
     let schedule = schedule::compute_schedule(&timeslots, start_date, nb_days);
 
     let mut schedule_table = Table::new();
-    schedule_table.set_titles(Row::new(schedule.keys().map(|d| cell!(b->d)).collect()));
+    schedule_table.set_titles(Row::new(
+        schedule.keys()
+            .map(|d| cell!(b->d.chrono_date().format("%a %d/%m")))
+            .collect()
+    ));
     let mut days_row = Row::empty();
 
     for slots in schedule.values() {
