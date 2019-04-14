@@ -41,7 +41,7 @@ pub enum ActuatorState {
 impl fmt::Display for ActuatorState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ActuatorState::Toggle(value) => write!(f, "{}", if *value { "On" } else { "Off " }),
+            ActuatorState::Toggle(value) => write!(f, "{}", if *value { "On" } else { "Off" }),
             ActuatorState::FloatValue(value) => write!(f, "{}", value),
         }
     }
@@ -663,11 +663,12 @@ fn actuator_thread(actuator: ActuatorHandle) {
             let actuator_guard = actuator.read().unwrap();
 
             println!(
-                "[AT {}] {}: new state ({}), AS {}, until {}",
+                "[AT {}] {} {}: new state {} ({}) until {}",
                 actuator_guard.info.name,
-                Time::now(),
-                state_str,
+                now.date,
+                now.time,
                 active_timeslot.actuator_state,
+                state_str,
                 active_timeslot.end_time
             );
 
