@@ -169,8 +169,6 @@ impl Actuator {
             active_timeslot.update_timeslot_added(self.timeslots.get(&id).unwrap(), id);
         });
 
-        println!("Added time slot, len = {:?}", self.timeslots.len());
-
         Ok(id)
     }
 
