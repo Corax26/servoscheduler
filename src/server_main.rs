@@ -6,6 +6,7 @@ extern crate tarpc;
 
 #[macro_use]
 extern crate serde_derive;
+extern crate serde_yaml;
 
 // Only for FutureService
 // extern crate futures;
@@ -32,55 +33,32 @@ mod time;
 mod time_slot;
 mod utils;
 
+use std::fs::File;
 use std::path::Path;
+use std::result;
 
 use tarpc::sync;
 
-use actuator::*;
-use actuator_controller::*;
 use rpc::SyncServiceExt;
 use rpc_server::RpcServer;
 use server::Server;
 
-fn main() {
-    let mut server = Server::new();
-
+fn main() -> result::Result<(), String> {
     let args: Vec<String> = std::env::args().collect();
-    match args.len() {
-        1 => {
-            server.add_actuator(Actuator::new(
-                ActuatorInfo {
-                    name: "switch".to_string(),
-                    actuator_type: ActuatorType::Toggle
-                },
-                ActuatorState::Toggle(false),
-                FileActuatorController::new(Path::new("fake_ctl_files/switch")).unwrap(),
-            )).unwrap();
-            server.add_actuator(Actuator::new(
-                ActuatorInfo {
-                    name: "knob".to_string(),
-                    actuator_type: ActuatorType::FloatValue { min: 0.0, max: 1.0 }
-                },
-                ActuatorState::FloatValue(0.5),
-                FileActuatorController::new(Path::new("fake_ctl_files/knob")).unwrap(),
-            )).unwrap();
-        },
-        2 => {
-            server.add_actuator(Actuator::new(
-                ActuatorInfo {
-                    name: "switch".to_string(),
-                    actuator_type: ActuatorType::Toggle
-                },
-                ActuatorState::Toggle(false),
-                FileActuatorController::new(Path::new(&args[1])).unwrap(),
-            )).unwrap();
-        },
-        _ => std::process::exit(1),
+
+    if args.len() != 2 {
+        return Err(format!("Usage: {} config_file.yaml", args[0]))
     }
+
+    let config_file = File::open(Path::new(&args[1]))
+        .map_err(|e| format!("Failed to open config file: {}", e))?;
+    let server = Server::new(config_file)
+        .map_err(|e| format!("Failed to create server: {}", e))?;
 
     let rpc_server = RpcServer::new(server);
 
     let handle = rpc_server.listen("localhost:4242", sync::server::Options::default())
         .unwrap();
     handle.run();
+    Ok(())
 }

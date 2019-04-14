@@ -1,7 +1,12 @@
 use std::collections::BTreeMap;
+use std::io::Read;
+use std::path::Path;
 use std::result;
 
+use serde_yaml;
+
 use actuator::*;
+use actuator_controller::*;
 use time_slot::*;
 use utils::*;
 
@@ -11,23 +16,80 @@ pub type Result<T> = result::Result<T, ::rpc::Error>;
 
 // TODO: merge with RpcServer?
 pub struct Server {
-    actuators: BTreeMap<u32, ActuatorHandle>,
-    next_actuator_id: u32,
+    actuators: Vec<ActuatorHandle>,
 }
 
 impl Server {
-    pub fn new() -> Server {
-        Server {
-            actuators: BTreeMap::new(),
-            next_actuator_id: 0,
+    pub fn new(config_file: impl Read) -> result::Result<Server, String> {
+        #[derive(Deserialize)]
+        #[serde(tag = "type")]
+        enum ConfigActuatorController {
+            File { path: String },
+        };
+        // We can't modify ActuatorState's serde attributes directly, as otherwise tarpc would
+        // complain, so as a workaround we create a mirror struct.
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        pub enum ConfigActuatorState {
+            Toggle(bool),
+            FloatValue(f64),
         }
+        #[derive(Deserialize)]
+        struct ConfigActuator {
+            name: String,
+            actuator_type: ActuatorType,
+            default_state: ConfigActuatorState,
+            controller: ConfigActuatorController,
+        }
+        #[derive(Deserialize)]
+        struct ConfigFile {
+            actuators: Vec<ConfigActuator>,
+        }
+
+        let config: ConfigFile = serde_yaml::from_reader(config_file)
+            .map_err(|e| format!("Reading config file failed: {}", e))?;
+
+        let mut actuators = Vec::<ActuatorHandle>::new();
+
+        for ca in config.actuators {
+            let controller = match ca.controller {
+                ConfigActuatorController::File { ref path } => {
+                    FileActuatorController::new(Path::new(&path))
+                },
+            }.map_err(|e| format!("Failed to create controller for actuator {}: {}", ca.name, e))?;
+
+            let default_state = match ca.default_state {
+                ConfigActuatorState::Toggle(b) => ActuatorState::Toggle(b),
+                ConfigActuatorState::FloatValue(f) => ActuatorState::FloatValue(f),
+            };
+
+            let actuator = Actuator::new(
+                ActuatorInfo {
+                    name: ca.name.clone(),
+                    actuator_type: ca.actuator_type,
+                },
+                default_state,
+                controller,
+            );
+
+            if !actuator.read().unwrap().valid() {
+                return Err(format!("Invalid configuration for actuator {}", ca.name))
+            }
+
+            actuators.push(actuator);
+        }
+
+        Ok(Server {
+            actuators,
+        })
     }
 
     // Public API (exposed via RPC)
 
-    pub fn list_actuators(&self) -> BTreeMap<u32, ActuatorInfo> {
+    pub fn list_actuators(&self) -> Vec<ActuatorInfo> {
         self.actuators.iter()
-            .map(|(id, a)| (*id, a.read().unwrap().info.clone())).collect()
+            .map(|a| a.read().unwrap().info.clone())
+            .collect()
     }
 
     pub fn list_timeslots(&self, actuator_id: u32) -> Result<BTreeMap<u32, TimeSlot>> {
@@ -105,34 +167,13 @@ impl Server {
         self.read_actuator(actuator_id, |a| a.set_state(state))
     }
 
-    // Internal API (not exposed via RPC)
-
-    pub fn add_actuator(&mut self, actuator: ActuatorHandle) -> Result<u32> {
-        if !(actuator.read().unwrap().valid()) {
-            return Err(InvalidArgument(IAE::ActuatorState))
-        }
-
-        let id = self.next_actuator_id;
-        self.actuators.insert(id, actuator);
-        self.next_actuator_id += 1;
-
-        Ok(id)
-    }
-
-    pub fn remove_actuator(&mut self, actuator_id: u32) -> Result<()> {
-        if self.actuators.remove(&actuator_id).is_some() {
-            Ok(())
-        } else {
-            Err(InvalidArgument(IAE::ActuatorId))
-        }
-    }
 
     fn read_actuator<F, T>(&self, actuator_id: u32, func: F) -> Result<T>
     where
         F: FnOnce(&Actuator) -> Result<T>
     {
         let actuator_handle =
-            self.actuators.get(&actuator_id).ok_or(InvalidArgument(IAE::ActuatorId))?;
+            self.actuators.get(actuator_id as usize).ok_or(InvalidArgument(IAE::ActuatorId))?;
         func(&actuator_handle.read().unwrap())
     }
 
@@ -141,7 +182,7 @@ impl Server {
         F: FnOnce(&mut Actuator) -> Result<T>
     {
         let actuator_handle =
-            self.actuators.get(&actuator_id).ok_or(InvalidArgument(IAE::ActuatorId))?;
+            self.actuators.get(actuator_id as usize).ok_or(InvalidArgument(IAE::ActuatorId))?;
         func(&mut *actuator_handle.write().unwrap())
     }
 }

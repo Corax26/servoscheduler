@@ -159,7 +159,7 @@ fn list_actuators() -> RpcResult {
     let actuators = get_client().list_actuators()?;
 
     println!("{:>5}  {:10} {:5}", "Index", "Name", "Type");
-    for (id, actuator) in actuators.iter() {
+    for (id, actuator) in actuators.iter().enumerate() {
         println!("{:5}  {:10} {:5}", id, actuator.name, actuator.actuator_type);
     }
 

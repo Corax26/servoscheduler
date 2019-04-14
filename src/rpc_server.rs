@@ -30,7 +30,7 @@ impl Clone for RpcServer {
 }
 
 impl SyncService for RpcServer {
-    fn list_actuators(&self) -> Result<BTreeMap<u32, ActuatorInfo>> {
+    fn list_actuators(&self) -> Result<Vec<ActuatorInfo>> {
         Ok(self.server.list_actuators())
     }
 

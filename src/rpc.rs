@@ -59,7 +59,7 @@ impl From<InvalArgError> for Error {
 
 service! {
     // Specifying | Error anyway, because tarpc::util::Never is a pain to handle.
-    rpc list_actuators() -> BTreeMap<u32, ActuatorInfo> | Error;
+    rpc list_actuators() -> Vec<ActuatorInfo> | Error;
     rpc list_timeslots(actuator_id: u32) -> BTreeMap<u32, TimeSlot> | Error;
 
     rpc get_default_state(actuator_id: u32) -> ActuatorState | Error;
