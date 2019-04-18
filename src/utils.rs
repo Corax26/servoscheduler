@@ -1,4 +1,5 @@
 use num::Num;
+use std::cmp::{min,max};
 use std::ops::Shl;
 
 pub trait ValidCheck {
@@ -11,18 +12,16 @@ pub struct InclusiveRange<T> {
     pub end: T,
 }
 
-impl<T: PartialOrd + Copy> InclusiveRange<T> {
+impl<T: Ord + Copy> InclusiveRange<T> {
     pub fn overlaps(&self, other: &InclusiveRange<T>) -> bool {
         self.start <= other.end && other.start <= self.end
     }
 
     pub fn intersection(&self, other: &InclusiveRange<T>) -> Option<InclusiveRange<T>> {
-        if self.overlaps(&other) {
-            if self.start <= other.start {
-                return Some(InclusiveRange { start: other.start, end: self.end })
-            } else {
-                return Some(InclusiveRange { start: self.start, end: other.end })
-            }
+        let start = max(self.start, other.start);
+        let end = min(self.end, other.end);
+        if start <= end {
+            return Some(InclusiveRange { start, end })
         } else {
             return None
         }
@@ -33,7 +32,7 @@ impl<T: PartialOrd + Copy> InclusiveRange<T> {
     }
 }
 
-impl<T: ValidCheck + PartialOrd> ValidCheck for InclusiveRange<T> {
+impl<T: ValidCheck + Ord> ValidCheck for InclusiveRange<T> {
     fn valid(&self) -> bool {
         self.start.valid() && self.end.valid() && self.start <= self.end
     }
@@ -45,7 +44,7 @@ pub struct ExclusiveRange<T> {
     pub end: T,
 }
 
-impl<T: PartialOrd + Copy> ExclusiveRange<T> {
+impl<T: Ord + Copy> ExclusiveRange<T> {
     pub fn overlaps(&self, other: &ExclusiveRange<T>) -> bool {
         self.start < other.end && other.start < self.end
     }
@@ -55,7 +54,7 @@ impl<T: PartialOrd + Copy> ExclusiveRange<T> {
     }
 }
 
-impl<T: ValidCheck + PartialOrd> ValidCheck for ExclusiveRange<T> {
+impl<T: ValidCheck + Ord> ValidCheck for ExclusiveRange<T> {
     fn valid(&self) -> bool {
         self.start.valid() && self.end.valid() && self.start < self.end
     }
